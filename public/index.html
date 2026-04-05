@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Editeur PDF &amp; Word</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- jsPDF + html2canvas pour export PDF côté navigateur -->
+  <!-- PDF export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- Word export 100% client-side -->
+  <script src="https://cdn.jsdelivr.net/npm/html-docx-js/dist/html-docx.js"></script>
 </head>
 <body>
 
@@ -78,6 +80,11 @@
 
       <div class="sep"></div>
 
+      <button class="btn-open" onclick="openFile()" title="Ouvrir (Ctrl+O)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10z"/></svg>
+        Ouvrir
+      </button>
+
       <button class="btn-pdf" id="btnPDF" onclick="exportPDF()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM8 18H7v-4h1v4zm4 0h-1v-4h2c1.1 0 2 .9 2 2s-.9 2-2 2zm5-3h-1v1h1v1h-1v1h-1v-4h2v1zm-5 1h1c.55 0 1-.45 1-1s-.45-1-1-1h-1v2z"/></svg>
         Générer PDF
@@ -124,9 +131,9 @@
       <button class="modal-close" onclick="document.getElementById('modal-install').style.display='none'">✕</button>
       <div class="modal-icon">🖥️</div>
       <h2>Installer sur mon ordinateur</h2>
-      <p class="modal-sub">Utilise ce logiciel directement depuis ton Bureau Windows, sans navigateur.</p>
+      <p class="modal-sub">Utilise ce logiciel directement depuis ton Bureau Windows ou mobile — <b>sans installation, sans serveur</b>.</p>
 
-      <a class="btn-dl-zip" href="https://github.com/nada132/editeur-pdf-word/archive/refs/heads/main.zip" download>
+      <a class="btn-dl-zip" href="https://github.com/nada132/editeur-pdf-word/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">
         ⬇ Télécharger le logiciel (.zip)
       </a>
 
@@ -141,7 +148,7 @@
         </li>
         <li>
           <span class="step-num">3</span>
-          <span>Double-clique sur <b>DEMARRER.bat</b> pour lancer</span>
+          <span>Double-clique sur <b>DEMARRER.bat</b> — s'ouvre directement dans ton navigateur</span>
         </li>
         <li>
           <span class="step-num">4</span>
@@ -149,7 +156,7 @@
         </li>
       </ol>
 
-      <p class="modal-note">⚠️ Node.js est requis : <a href="https://nodejs.org" target="_blank">télécharger Node.js</a> (gratuit, installation en 1 clic)</p>
+      <p class="modal-note">✅ Aucune installation requise — fonctionne sur PC, tablette et mobile</p>
     </div>
   </div>
 

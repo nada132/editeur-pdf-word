@@ -138,6 +138,26 @@ input[type="color"] {
 }
 
 /* Export buttons */
+.btn-open {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px !important;
+  height: 30px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  border-radius: 5px !important;
+  margin-left: 3px;
+  transition: filter 0.15s, transform 0.1s, box-shadow 0.15s !important;
+  white-space: nowrap;
+  border: none !important;
+  background: #475569 !important;
+  color: white !important;
+  cursor: pointer;
+}
+.btn-open:hover { filter: brightness(1.15); box-shadow: 0 2px 8px rgba(71,85,105,0.5) !important; }
+.btn-open:active { transform: scale(0.97) !important; }
+
 .btn-pdf, .btn-word {
   display: inline-flex !important;
   align-items: center;

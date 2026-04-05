@@ -92,11 +92,10 @@ async function exportPDF() {
     const title = document.getElementById('docTitle').value.trim() || 'document';
     const { jsPDF } = window.jspdf;
 
-    // Cloner l'éditeur dans un conteneur de largeur A4 fixe
     const wrap = document.createElement('div');
     wrap.style.cssText = [
       'position:fixed', 'top:-99999px', 'left:0',
-      'width:794px',   // ~A4 à 96dpi
+      'width:794px',
       'padding:60px 70px',
       'background:#fff',
       'font-family:Arial,sans-serif',
@@ -136,7 +135,7 @@ async function exportPDF() {
   }
 }
 
-// ========== EXPORT WORD ==========
+// ========== EXPORT WORD (100% client-side) ==========
 async function exportWord() {
   if (!editor.innerText.trim()) {
     showNotif('⚠️ Le document est vide.', 'error');
@@ -148,18 +147,8 @@ async function exportWord() {
 
   try {
     const title = document.getElementById('docTitle').value.trim() || 'document';
-    const res = await fetch('/api/export-word', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html: editor.innerHTML, title })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Erreur serveur' }));
-      throw new Error(err.error || 'Erreur ' + res.status);
-    }
-
-    const blob = await res.blob();
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${editor.innerHTML}</body></html>`;
+    const blob = window.htmlDocx.asBlob(html);
     const filename = sanitize(title) + '.docx';
     triggerDownload(blob, filename, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     showNotif('✅ Word téléchargé : ' + filename);
@@ -168,6 +157,34 @@ async function exportWord() {
   } finally {
     setBtn('btnWord', false);
   }
+}
+
+// ========== OUVRIR UN FICHIER HTML/TXT ==========
+function openFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.html,.htm,.txt';
+  input.onchange = function () {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const content = e.target.result;
+      if (file.name.endsWith('.txt')) {
+        editor.innerText = content;
+      } else {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        editor.innerHTML = doc.body.innerHTML;
+      }
+      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+      document.getElementById('docTitle').value = nameWithoutExt;
+      updateCount();
+      showNotif('📂 Fichier ouvert : ' + file.name);
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ========== TÉLÉCHARGEMENT ==========
@@ -191,29 +208,12 @@ document.addEventListener('keydown', function (e) {
   if (e.ctrlKey && !e.altKey) {
     if (e.key === 'p') { e.preventDefault(); exportPDF(); }
     if (e.key === 'w') { e.preventDefault(); exportWord(); }
+    if (e.key === 'o') { e.preventDefault(); openFile(); }
   }
 });
-
-// ========== CHARGEMENT FICHIER (Ouvrir avec) ==========
-async function loadFileIfProvided() {
-  try {
-    const res = await fetch('/api/open-file');
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.content) {
-      editor.innerHTML = data.content;
-      if (data.title) document.getElementById('docTitle').value = data.title;
-      updateCount();
-      showNotif('📂 Fichier ouvert : ' + data.title);
-    }
-  } catch (e) {
-    // Pas de fichier à ouvrir, ignorer
-  }
-}
 
 // ========== INIT ==========
 window.addEventListener('load', () => {
   editor.focus();
   updateCount();
-  loadFileIfProvided();
 });
