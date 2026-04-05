@@ -113,6 +113,46 @@
   <!-- NOTIFICATION -->
   <div id="notification" class="notification hidden"></div>
 
+  <!-- BOUTON TÉLÉCHARGER (flottant) -->
+  <button class="btn-download-app" onclick="document.getElementById('modal-install').style.display='flex'" title="Installer sur mon ordinateur">
+    ⬇ Installer sur mon PC
+  </button>
+
+  <!-- MODAL INSTALLATION -->
+  <div id="modal-install" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-box">
+      <button class="modal-close" onclick="document.getElementById('modal-install').style.display='none'">✕</button>
+      <div class="modal-icon">🖥️</div>
+      <h2>Installer sur mon ordinateur</h2>
+      <p class="modal-sub">Utilise ce logiciel directement depuis ton Bureau Windows, sans navigateur.</p>
+
+      <a class="btn-dl-zip" href="https://github.com/nada132/editeur-pdf-word/archive/refs/heads/main.zip" download>
+        ⬇ Télécharger le logiciel (.zip)
+      </a>
+
+      <ol class="install-steps">
+        <li>
+          <span class="step-num">1</span>
+          <span>Clique sur le bouton ci-dessus et <b>télécharge le ZIP</b></span>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <span><b>Extrais</b> le dossier (clic droit → Extraire tout)</span>
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          <span>Double-clique sur <b>DEMARRER.bat</b> pour lancer</span>
+        </li>
+        <li>
+          <span class="step-num">4</span>
+          <span>Pour la barre des tâches : clic droit sur <b>DEMARRER.bat</b> → <b>Épingler à la barre des tâches</b></span>
+        </li>
+      </ol>
+
+      <p class="modal-note">⚠️ Node.js est requis : <a href="https://nodejs.org" target="_blank">télécharger Node.js</a> (gratuit, installation en 1 clic)</p>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
