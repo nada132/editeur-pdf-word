@@ -90,20 +90,44 @@ async function exportPDF() {
 
   try {
     const title = document.getElementById('docTitle').value.trim() || 'document';
-    const res = await fetch('/api/export-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html: editor.innerHTML, title })
-    });
+    const { jsPDF } = window.jspdf;
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Erreur serveur' }));
-      throw new Error(err.error || 'Erreur ' + res.status);
+    // Cloner l'éditeur dans un conteneur de largeur A4 fixe
+    const wrap = document.createElement('div');
+    wrap.style.cssText = [
+      'position:fixed', 'top:-99999px', 'left:0',
+      'width:794px',   // ~A4 à 96dpi
+      'padding:60px 70px',
+      'background:#fff',
+      'font-family:Arial,sans-serif',
+      'font-size:13px',
+      'line-height:1.7',
+      'color:#000'
+    ].join(';');
+    wrap.innerHTML = editor.innerHTML;
+    document.body.appendChild(wrap);
+
+    const canvas = await html2canvas(wrap, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    document.body.removeChild(wrap);
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pdfW = 210, pdfH = 297;
+    const margin = 15;
+    const contentW = pdfW - margin * 2;
+    const contentH = pdfH - margin * 2;
+    const totalImgH = (canvas.height / canvas.width) * contentW;
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    let yOff = 0;
+
+    while (yOff < totalImgH) {
+      if (yOff > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', margin, margin - (yOff), contentW, totalImgH);
+      yOff += contentH;
     }
 
-    const blob = await res.blob();
     const filename = sanitize(title) + '.pdf';
-    triggerDownload(blob, filename, 'application/pdf');
+    pdf.save(filename);
     showNotif('✅ PDF téléchargé : ' + filename);
   } catch (err) {
     showNotif('❌ Erreur PDF : ' + err.message, 'error');
