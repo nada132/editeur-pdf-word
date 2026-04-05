@@ -1,0 +1,25 @@
+{
+  "name": "editeur-pdf-word",
+  "version": "1.0.0",
+  "description": "Editeur de texte avec export PDF et Word",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "docx": "^8.5.0",
+    "express": "^4.22.1",
+    "mammoth": "^1.12.0",
+    "puppeteer": "^22.15.0"
+  },
+  "pkg": {
+    "scripts": "server.js",
+    "assets": [
+      "public/**/*"
+    ],
+    "targets": [
+      "node20-win-x64"
+    ],
+    "outputPath": "dist"
+  }
+}

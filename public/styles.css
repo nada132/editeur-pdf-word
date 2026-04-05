@@ -1,0 +1,282 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #f0f2f5;
+  --toolbar-bg: #1e293b;
+  --toolbar-text: #e2e8f0;
+  --page-bg: #ffffff;
+  --shadow: 0 2px 12px rgba(0,0,0,0.12);
+  --accent-pdf: #dc2626;
+  --accent-word: #2563eb;
+  --statusbar-bg: #1e293b;
+  --statusbar-text: #94a3b8;
+}
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: var(--bg);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ========== TOOLBAR ========== */
+.toolbar {
+  background: var(--toolbar-bg);
+  color: var(--toolbar-text);
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-title {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  color: #f8fafc;
+}
+
+.doc-title-input {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  width: 200px;
+  outline: none;
+  transition: background 0.2s;
+}
+
+.doc-title-input::placeholder { color: rgba(255,255,255,0.4); }
+.doc-title-input:focus {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.4);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.format-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255,255,255,0.15);
+  margin: 0 5px;
+}
+
+.toolbar button {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid transparent;
+  color: #e2e8f0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  min-width: 28px;
+  height: 28px;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.toolbar button:hover {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.toolbar button:active { background: rgba(255,255,255,0.3); }
+
+select {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  height: 28px;
+  cursor: pointer;
+  outline: none;
+}
+
+select option { background: #1e293b; color: #e2e8f0; }
+
+input[type="color"] {
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px;
+  background: transparent;
+}
+
+/* Export buttons */
+.btn-pdf, .btn-word {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px !important;
+  height: 30px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  border-radius: 5px !important;
+  margin-left: 3px;
+  transition: filter 0.15s, transform 0.1s, box-shadow 0.15s !important;
+  white-space: nowrap;
+  border: none !important;
+}
+
+.btn-pdf {
+  background: var(--accent-pdf) !important;
+  color: white !important;
+}
+
+.btn-pdf:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 2px 8px rgba(220,38,38,0.5) !important;
+}
+
+.btn-word {
+  background: var(--accent-word) !important;
+  color: white !important;
+}
+
+.btn-word:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 2px 8px rgba(37,99,235,0.5) !important;
+}
+
+.btn-pdf:active, .btn-word:active { transform: scale(0.97) !important; }
+
+.btn-pdf:disabled, .btn-word:disabled {
+  opacity: 0.55;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* ========== EDITEUR ========== */
+.editor-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 20px;
+  background: var(--bg);
+}
+
+.page-wrapper {
+  max-width: 840px;
+  margin: 0 auto;
+}
+
+.editor {
+  background: var(--page-bg);
+  min-height: 1050px;
+  padding: 55px 65px;
+  box-shadow: var(--shadow);
+  border-radius: 2px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #1e293b;
+  outline: none;
+  word-wrap: break-word;
+  position: relative;
+}
+
+.editor:empty::before {
+  content: attr(data-placeholder);
+  color: #adb5bd;
+  pointer-events: none;
+  position: absolute;
+  white-space: pre-line;
+  line-height: 1.75;
+}
+
+.editor p { margin-bottom: 0.6em; }
+.editor h1 { font-size: 2em; font-weight: 700; margin: 0.8em 0 0.4em; color: #0f172a; }
+.editor h2 { font-size: 1.5em; font-weight: 600; margin: 0.7em 0 0.35em; color: #1e293b; }
+.editor h3 { font-size: 1.25em; font-weight: 600; margin: 0.6em 0 0.3em; color: #334155; }
+.editor ul, .editor ol { padding-left: 2.2em; margin-bottom: 0.6em; }
+.editor li { margin-bottom: 0.2em; }
+.editor blockquote {
+  border-left: 3px solid #3b82f6;
+  padding-left: 1em;
+  margin: 0.5em 0;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* ========== STATUSBAR ========== */
+.statusbar {
+  background: var(--statusbar-bg);
+  color: var(--statusbar-text);
+  padding: 3px 16px;
+  font-size: 11px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.shortcut-hint { margin-left: auto; opacity: 0.7; }
+
+/* ========== NOTIFICATION ========== */
+.notification {
+  position: fixed;
+  bottom: 36px;
+  right: 24px;
+  background: #16a34a;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  z-index: 9999;
+  transition: opacity 0.3s, transform 0.3s;
+  max-width: 360px;
+}
+
+.notification.error { background: #dc2626; }
+.notification.info { background: #2563eb; }
+.notification.hidden { display: none; }
+
+/* ========== SPINNER ========== */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 5px;
+}
