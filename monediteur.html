@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon Éditeur de Documents</title>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-html2canvas@1.5.2/dist/html2canvas.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',sans-serif; background:#f0f2f5; height:100vh; display:flex; flex-direction:column; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    background:#2c3e50; color:#fff; padding:0 16px;
+    display:flex; align-items:center; gap:16px; height:48px; flex-shrink:0;
+  }
+  #topbar h1 { font-size:15px; font-weight:600; letter-spacing:.3px; white-space:nowrap; }
+  #topbar .spacer { flex:1; }
+  #topbar input[type=text] {
+    background:rgba(255,255,255,.12); border:none; border-radius:6px;
+    color:#fff; padding:5px 10px; font-size:13px; width:180px; outline:none;
+  }
+  #topbar input[type=text]::placeholder { color:rgba(255,255,255,.5); }
+  .topbtn {
+    padding:6px 14px; border-radius:6px; border:none; font-size:13px;
+    font-weight:600; cursor:pointer; white-space:nowrap;
+  }
+  #btnWord { background:#2980b9; color:#fff; }
+  #btnPdf  { background:#c0392b; color:#fff; }
+  #btnWord:hover { background:#1a6fa0; }
+  #btnPdf:hover  { background:#a93226; }
+
+  /* ── TOOLBAR ── */
+  #toolbar {
+    background:#fff; border-bottom:1px solid #dde1e7;
+    display:flex; align-items:center; flex-wrap:wrap;
+    gap:2px; padding:6px 12px; flex-shrink:0;
+  }
+  .sep { width:1px; height:22px; background:#dde1e7; margin:0 4px; }
+  .tb { width:30px; height:30px; border:none; background:transparent;
+        border-radius:5px; cursor:pointer; font-size:14px; display:flex;
+        align-items:center; justify-content:center; color:#2c3e50; }
+  .tb:hover { background:#eef0f3; }
+  .tb.active { background:#d6eaf8; color:#2980b9; }
+  .tbsel {
+    height:30px; border:1px solid #dde1e7; border-radius:5px;
+    font-size:13px; padding:0 6px; background:#fff; cursor:pointer;
+    color:#2c3e50;
+  }
+  /* color pickers */
+  .colorBtn { position:relative; }
+  .colorBtn input[type=color] {
+    position:absolute; opacity:0; width:30px; height:30px;
+    top:0; left:0; cursor:pointer;
+  }
+  .colorMark {
+    pointer-events:none; font-size:13px; font-weight:700;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    line-height:1;
+  }
+  .colorBar { width:18px; height:4px; border-radius:2px; margin-top:2px; }
+
+  /* ── STATUS ── */
+  #statusBar {
+    background:#fff; border-bottom:1px solid #dde1e7;
+    padding:4px 16px; font-size:12px; color:#7f8c9a; flex-shrink:0;
+    display:flex; gap:20px;
+  }
+  #statusBar span { white-space:nowrap; }
+
+  /* ── EDITOR AREA ── */
+  #editorWrap {
+    flex:1; overflow-y:auto; padding:32px 24px; background:#f0f2f5;
+    display:flex; justify-content:center;
+  }
+  #page {
+    background:#fff; width:794px; min-height:1123px;
+    padding:72px 80px; border-radius:4px;
+    box-shadow:0 2px 12px rgba(0,0,0,.12);
+    outline:none;
+  }
+  #page:focus { box-shadow:0 2px 20px rgba(41,128,185,.2); }
+  #page[data-placeholder]:empty:before {
+    content:attr(data-placeholder);
+    color:#bdc3cb; pointer-events:none;
+  }
+
+  /* ── INSERT SHAPE MENU ── */
+  #shapeMenu {
+    display:none; position:absolute; z-index:200; background:#fff;
+    border:1px solid #dde1e7; border-radius:8px;
+    box-shadow:0 4px 16px rgba(0,0,0,.12);
+    padding:8px; gap:8px; flex-wrap:wrap; width:200px;
+  }
+  #shapeMenu.open { display:flex; }
+  .shapeOpt {
+    width:56px; height:50px; border:1px solid #dde1e7; border-radius:6px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    font-size:11px; color:#555; flex-direction:column; gap:4px;
+    background:#fafafa;
+  }
+  .shapeOpt:hover { background:#eef0f3; border-color:#2980b9; }
+  .shapeOpt svg { flex-shrink:0; }
+
+  /* ── INSERTED SHAPES ── */
+  .inserted-shape {
+    display:inline-block; margin:4px; vertical-align:middle;
+    cursor:move; user-select:none;
+  }
+  .inserted-shape.selected { outline:2px dashed #2980b9; }
+
+  /* print */
+  @media print {
+    body { background:#fff; }
+    #topbar,#toolbar,#statusBar { display:none; }
+    #editorWrap { padding:0; background:#fff; overflow:visible; }
+    #page { box-shadow:none; border-radius:0; width:100%; padding:40px; min-height:auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── TOP BAR ── -->
+<div id="topbar">
+  <h1>✦ Mon Éditeur</h1>
+  <div class="spacer"></div>
+  <input type="text" id="docTitle" placeholder="Nom du fichier..." value="document">
+  <button class="topbtn" id="btnWord" onclick="exportWord()">⬇ Word (.docx)</button>
+  <button class="topbtn" id="btnPdf"  onclick="exportPDF()">⬇ PDF</button>
+</div>
+
+<!-- ── TOOLBAR ── -->
+<div id="toolbar">
+  <!-- Font -->
+  <select class="tbsel" style="width:130px" onchange="exec('fontName',this.value)">
+    <option value="Arial">Arial</option>
+    <option value="Times New Roman">Times New Roman</option>
+    <option value="Georgia">Georgia</option>
+    <option value="Verdana">Verdana</option>
+    <option value="Courier New">Courier New</option>
+    <option value="Trebuchet MS">Trebuchet MS</option>
+  </select>
+  <select class="tbsel" style="width:60px" onchange="exec('fontSize',this.value)">
+    <option value="1">8</option>
+    <option value="2">10</option>
+    <option value="3" selected>12</option>
+    <option value="4">14</option>
+    <option value="5">18</option>
+    <option value="6">24</option>
+    <option value="7">36</option>
+  </select>
+  <div class="sep"></div>
+
+  <!-- Style -->
+  <button class="tb" title="Gras (Ctrl+B)" onclick="exec('bold')"><b>B</b></button>
+  <button class="tb" title="Italique (Ctrl+I)" onclick="exec('italic')"><i>I</i></button>
+  <button class="tb" title="Souligné (Ctrl+U)" onclick="exec('underline')"><u>U</u></button>
+  <button class="tb" title="Barré" onclick="exec('strikeThrough')"><s>S</s></button>
+  <div class="sep"></div>
+
+  <!-- Colors -->
+  <div class="tb colorBtn" title="Couleur du texte">
+    <div class="colorMark">
+      A<div class="colorBar" id="txtColorBar" style="background:#e74c3c"></div>
+    </div>
+    <input type="color" value="#e74c3c" id="txtColor"
+      oninput="document.getElementById('txtColorBar').style.background=this.value"
+      onchange="exec('foreColor',this.value)">
+  </div>
+  <div class="tb colorBtn" title="Surlignage">
+    <div class="colorMark">
+      <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" rx="2" fill="currentColor" opacity=".2"/><path d="M3 10l3-6h2l3 6" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/></svg>
+      <div class="colorBar" id="hlColorBar" style="background:#f9ca24"></div>
+    </div>
+    <input type="color" value="#f9ca24" id="hlColor"
+      oninput="document.getElementById('hlColorBar').style.background=this.value"
+      onchange="exec('hiliteColor',this.value)">
+  </div>
+  <div class="sep"></div>
+
+  <!-- Align -->
+  <button class="tb" title="Aligner à gauche" onclick="exec('justifyLeft')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.5"/><line x1="2" y1="8" x2="10" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="2" y1="12" x2="12" y2="12" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <button class="tb" title="Centrer" onclick="exec('justifyCenter')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.5"/><line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="3" y1="12" x2="13" y2="12" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <button class="tb" title="Aligner à droite" onclick="exec('justifyRight')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.5"/><line x1="6" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="4" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <button class="tb" title="Justifier" onclick="exec('justifyFull')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.5"/><line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <div class="sep"></div>
+
+  <!-- Lists & indent -->
+  <button class="tb" title="Liste à puces" onclick="exec('insertUnorderedList')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="3" cy="5" r="1.5" fill="currentColor"/><line x1="6" y1="5" x2="14" y2="5" stroke="currentColor" stroke-width="1.5"/><circle cx="3" cy="11" r="1.5" fill="currentColor"/><line x1="6" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <button class="tb" title="Liste numérotée" onclick="exec('insertOrderedList')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><text x="1" y="7" font-size="7" fill="currentColor">1.</text><line x1="7" y1="5" x2="14" y2="5" stroke="currentColor" stroke-width="1.5"/><text x="1" y="13" font-size="7" fill="currentColor">2.</text><line x1="7" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <button class="tb" title="Diminuer le retrait" onclick="exec('outdent')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="7,4 3,8 7,12" stroke="currentColor" stroke-width="1.5" fill="none"/><line x1="9" y1="5" x2="14" y2="5" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <button class="tb" title="Augmenter le retrait" onclick="exec('indent')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="3,4 7,8 3,12" stroke="currentColor" stroke-width="1.5" fill="none"/><line x1="9" y1="5" x2="14" y2="5" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="1.5"/></svg>
+  </button>
+  <div class="sep"></div>
+
+  <!-- Heading -->
+  <select class="tbsel" style="width:100px" onchange="applyHeading(this.value);this.value=''">
+    <option value="" disabled selected>Titre…</option>
+    <option value="h1">Titre 1</option>
+    <option value="h2">Titre 2</option>
+    <option value="h3">Titre 3</option>
+    <option value="p">Normal</option>
+  </select>
+  <div class="sep"></div>
+
+  <!-- Shapes -->
+  <div style="position:relative">
+    <button class="tb" title="Insérer une forme" id="shapeBtn" onclick="toggleShapeMenu(event)" style="width:auto;padding:0 8px;gap:4px">
+      <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="10" cy="4" r="3" stroke="currentColor" stroke-width="1.2" fill="none"/><polygon points="7,13 11,13 9,10" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/></svg>
+      Formes
+    </button>
+    <div id="shapeMenu">
+      <div class="shapeOpt" onclick="insertShape('rect')">
+        <svg width="32" height="24"><rect x="2" y="4" width="28" height="16" rx="2" stroke="#2980b9" stroke-width="2" fill="#d6eaf8"/></svg>
+        <span>Rectangle</span>
+      </div>
+      <div class="shapeOpt" onclick="insertShape('circle')">
+        <svg width="32" height="28"><circle cx="16" cy="14" r="11" stroke="#27ae60" stroke-width="2" fill="#d5f5e3"/></svg>
+        <span>Cercle</span>
+      </div>
+      <div class="shapeOpt" onclick="insertShape('triangle')">
+        <svg width="32" height="28"><polygon points="16,3 30,25 2,25" stroke="#e67e22" stroke-width="2" fill="#fdebd0" stroke-linejoin="round"/></svg>
+        <span>Triangle</span>
+      </div>
+      <div class="shapeOpt" onclick="insertShape('arrow')">
+        <svg width="32" height="28"><polygon points="2,10 20,10 20,5 30,14 20,23 20,18 2,18" stroke="#8e44ad" stroke-width="1.5" fill="#e8daef" stroke-linejoin="round"/></svg>
+        <span>Flèche</span>
+      </div>
+      <div class="shapeOpt" onclick="insertShape('star')">
+        <svg width="32" height="28"><polygon points="16,3 19,11 28,11 21,17 24,25 16,20 8,25 11,17 4,11 13,11" stroke="#e74c3c" stroke-width="1.5" fill="#fadbd8" stroke-linejoin="round"/></svg>
+        <span>Étoile</span>
+      </div>
+      <div class="shapeOpt" onclick="insertShape('line')">
+        <svg width="32" height="28"><line x1="4" y1="14" x2="28" y2="14" stroke="#2c3e50" stroke-width="3" stroke-linecap="round"/></svg>
+        <span>Ligne</span>
+      </div>
+    </div>
+  </div>
+  <div class="sep"></div>
+
+  <!-- Misc -->
+  <button class="tb" title="Insérer un lien" onclick="insertLink()">
+    <svg width="16" height="16" viewBox="0 0 16 16"><path d="M6 10l4-4" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M4 12a3 3 0 01 0-4l2-2a3 3 0 014 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M12 4a3 3 0 010 4l-2 2a3 3 0 01-4 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+  </button>
+  <button class="tb" title="Insérer une image" onclick="insertImage()">
+    <svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.3" fill="none"/><circle cx="5" cy="6" r="1.2" fill="currentColor"/><polyline points="1,13 5,8 9,11 11,9 15,13" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+  </button>
+  <button class="tb" title="Ligne horizontale" onclick="exec('insertHorizontalRule')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.8"/></svg>
+  </button>
+  <button class="tb" title="Effacer la mise en forme" onclick="exec('removeFormat')">
+    <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 12L9 3h2l2 5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/><line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.3"/><line x1="10" y1="3" x2="14" y2="10" stroke="currentColor" stroke-width="1.3"/><line x1="1" y1="1" x2="15" y2="15" stroke="#e74c3c" stroke-width="1.3" stroke-linecap="round"/></svg>
+  </button>
+</div>
+
+<!-- ── STATUS BAR ── -->
+<div id="statusBar">
+  <span id="wordCount">0 mots</span>
+  <span id="charCount">0 caractères</span>
+  <span id="saveStatus">Non sauvegardé</span>
+</div>
+
+<!-- ── EDITOR ── -->
+<div id="editorWrap">
+  <div id="page" contenteditable="true"
+    data-placeholder="Commencez à écrire ou collez votre texte ici…"
+    onkeyup="updateStats()" onpaste="onPaste(event)" oninput="updateStats();debounceSave()">
+  </div>
+</div>
+
+<!-- hidden img input -->
+<input type="file" id="imgInput" accept="image/*" style="display:none" onchange="loadImage(event)">
+
+<script>
+  const page = document.getElementById('page');
+
+  /* ── execCommand wrapper ── */
+  function exec(cmd, val) {
+    page.focus();
+    document.execCommand(cmd, false, val || null);
+  }
+
+  function applyHeading(tag) {
+    exec('formatBlock', tag);
+  }
+
+  /* ── Stats ── */
+  function updateStats() {
+    const txt = page.innerText || '';
+    const words = txt.trim() ? txt.trim().split(/\s+/).length : 0;
+    document.getElementById('wordCount').textContent = words + ' mot' + (words>1?'s':'');
+    document.getElementById('charCount').textContent = txt.length + ' caractère' + (txt.length>1?'s':'');
+  }
+
+  /* ── Auto-save to localStorage ── */
+  let saveTimer;
+  function debounceSave() {
+    clearTimeout(saveTimer);
+    document.getElementById('saveStatus').textContent = 'Sauvegarde…';
+    saveTimer = setTimeout(() => {
+      localStorage.setItem('mon_editeur_content', page.innerHTML);
+      document.getElementById('saveStatus').textContent = 'Sauvegardé ✓';
+    }, 1200);
+  }
+
+  /* ── Restore on load ── */
+  window.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('mon_editeur_content');
+    if (saved) { page.innerHTML = saved; }
+    updateStats();
+  });
+
+  /* ── Smart paste (plain or HTML) ── */
+  function onPaste(e) {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const txt  = e.clipboardData.getData('text/plain');
+    if (html) {
+      exec('insertHTML', html);
+    } else {
+      exec('insertText', txt);
+    }
+    updateStats();
+  }
+
+  /* ── Insert Link ── */
+  function insertLink() {
+    const url = prompt('URL du lien :', 'https://');
+    if (url) exec('createLink', url);
+  }
+
+  /* ── Insert Image ── */
+  function insertImage() {
+    document.getElementById('imgInput').click();
+  }
+  function loadImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      exec('insertImage', ev.target.result);
+      // make image resizable
+      setTimeout(() => {
+        page.querySelectorAll('img').forEach(img => {
+          img.style.maxWidth = '100%';
+          img.style.cursor = 'pointer';
+        });
+      }, 100);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  /* ── Shapes ── */
+  const shapeSVGs = {
+    rect:     (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect x="4" y="4" width="112" height="72" rx="6" fill="${c}" stroke="#2c3e50" stroke-width="2"/></svg>`,
+    circle:   (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><circle cx="50" cy="50" r="46" fill="${c}" stroke="#2c3e50" stroke-width="2"/></svg>`,
+    triangle: (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="100"><polygon points="60,6 114,94 6,94" fill="${c}" stroke="#2c3e50" stroke-width="2" stroke-linejoin="round"/></svg>`,
+    arrow:    (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="140" height="80"><polygon points="6,26 90,26 90,10 134,40 90,70 90,54 6,54" fill="${c}" stroke="#2c3e50" stroke-width="2" stroke-linejoin="round"/></svg>`,
+    star:     (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><polygon points="50,6 61,36 94,36 68,56 79,86 50,66 21,86 32,56 6,36 39,36" fill="${c}" stroke="#2c3e50" stroke-width="2" stroke-linejoin="round"/></svg>`,
+    line:     (c) => `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="20"><line x1="4" y1="10" x2="156" y2="10" stroke="${c}" stroke-width="4" stroke-linecap="round"/></svg>`,
+  };
+  const shapeColors = { rect:'#d6eaf8', circle:'#d5f5e3', triangle:'#fdebd0', arrow:'#e8daef', star:'#fadbd8', line:'#2c3e50' };
+
+  function toggleShapeMenu(e) {
+    e.stopPropagation();
+    document.getElementById('shapeMenu').classList.toggle('open');
+  }
+  document.addEventListener('click', () => document.getElementById('shapeMenu').classList.remove('open'));
+
+  function insertShape(type) {
+    document.getElementById('shapeMenu').classList.remove('open');
+    const color = shapeColors[type];
+    const svg = shapeSVGs[type](color);
+    const blob = new Blob([svg], {type:'image/svg+xml'});
+    const url  = URL.createObjectURL(blob);
+    const img  = `<img src="${url}" class="inserted-shape" draggable="true" style="cursor:move;vertical-align:middle;margin:4px;" onclick="this.classList.toggle('selected')">`;
+    exec('insertHTML', img + '&nbsp;');
+  }
+
+  /* ── EXPORT WORD ── */
+  async function exportWord() {
+    const title = document.getElementById('docTitle').value || 'document';
+    const btn = document.getElementById('btnWord');
+    btn.textContent = '…'; btn.disabled = true;
+
+    try {
+      const {
+        Document, Packer, Paragraph, TextRun, AlignmentType,
+        LevelFormat, BorderStyle, HeadingLevel, ExternalHyperlink
+      } = docx;
+
+      const children = [];
+      const els = page.childNodes;
+
+      function nodeToRuns(node) {
+        const runs = [];
+        node.childNodes.forEach(child => {
+          if (child.nodeType === 3) {
+            if (child.textContent) runs.push(new TextRun({ text: child.textContent, font:'Arial', size:22 }));
+          } else {
+            const tag = child.tagName?.toLowerCase();
+            const style = child.style || {};
+            const color = (style.color || '').replace('#','') || undefined;
+            const bg    = (style.backgroundColor || '').replace('#','') || undefined;
+            const opts  = {
+              font:'Arial', size:22,
+              bold: tag==='b'||tag==='strong'||child.closest?.('b')||child.closest?.('strong') ? true : undefined,
+              italics: tag==='i'||tag==='em' ? true : undefined,
+              underline: tag==='u' ? {type:'single'} : undefined,
+              strike: tag==='s'||tag==='strike' ? true : undefined,
+              color: color || undefined,
+              highlight: bg ? 'yellow' : undefined,
+            };
+            if (child.childNodes.length) {
+              child.childNodes.forEach(c => {
+                if (c.nodeType===3) runs.push(new TextRun({...opts, text: c.textContent}));
+                else runs.push(...nodeToRuns(c));
+              });
+            } else {
+              const t = child.textContent;
+              if (t) runs.push(new TextRun({...opts, text:t}));
+            }
+          }
+        });
+        return runs;
+      }
+
+      page.querySelectorAll('p,h1,h2,h3,h4,br,li,div').forEach(el => {
+        const tag = el.tagName.toLowerCase();
+        let heading = undefined;
+        if (tag==='h1') heading = HeadingLevel.HEADING_1;
+        if (tag==='h2') heading = HeadingLevel.HEADING_2;
+        if (tag==='h3') heading = HeadingLevel.HEADING_3;
+
+        const align = el.style?.textAlign;
+        let alignType = AlignmentType.LEFT;
+        if (align==='center') alignType = AlignmentType.CENTER;
+        if (align==='right')  alignType = AlignmentType.RIGHT;
+        if (align==='justify') alignType = AlignmentType.JUSTIFIED;
+
+        const runs = nodeToRuns(el);
+        if (!runs.length && tag!=='br') runs.push(new TextRun({text:'', font:'Arial', size:22}));
+
+        children.push(new Paragraph({
+          heading,
+          alignment: alignType,
+          spacing:{ before:80, after:80 },
+          children: runs,
+        }));
+      });
+
+      if (!children.length) {
+        children.push(new Paragraph({ children:[ new TextRun({ text: page.innerText, font:'Arial', size:22 }) ] }));
+      }
+
+      const doc = new Document({
+        sections:[{
+          properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:1134, right:1134, bottom:1134, left:1134 } } },
+          children
+        }]
+      });
+
+      const buf = await Packer.toBuffer(doc);
+      const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      download(blob, title + '.docx');
+    } catch(e) {
+      alert('Erreur Word : ' + e.message);
+      console.error(e);
+    }
+    btn.textContent = '⬇ Word (.docx)'; btn.disabled = false;
+  }
+
+  /* ── EXPORT PDF ── */
+  async function exportPDF() {
+    const title  = document.getElementById('docTitle').value || 'document';
+    const btn    = document.getElementById('btnPdf');
+    btn.textContent = '…'; btn.disabled = true;
+
+    try {
+      const canvas = await html2canvas(page, { scale:2, useCORS:true, backgroundColor:'#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const { jsPDF } = window.jspdf;
+      const pdf  = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+      const pW   = pdf.internal.pageSize.getWidth();
+      const pH   = pdf.internal.pageSize.getHeight();
+      const iW   = pW;
+      const iH   = (canvas.height * pW) / canvas.width;
+      let posY   = 0;
+      let remH   = iH;
+      let first  = true;
+      while (remH > 0) {
+        if (!first) pdf.addPage();
+        const sliceH = Math.min(pH, remH);
+        pdf.addImage(imgData, 'JPEG', 0, -posY, iW, iH);
+        posY   += pH;
+        remH   -= pH;
+        first   = false;
+      }
+      pdf.save(title + '.pdf');
+    } catch(e) {
+      alert('Erreur PDF : ' + e.message);
+      console.error(e);
+    }
+    btn.textContent = '⬇ PDF'; btn.disabled = false;
+  }
+
+  /* ── Download helper ── */
+  function download(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ── Keyboard shortcuts ── */
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); debounceSave(); }
+  });
+
+  updateStats();
+</script>
+</body>
+</html>
