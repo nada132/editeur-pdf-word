@@ -1634,5 +1634,13 @@ async function sendAiMsg() {
 // ════════════════════════════════════════════════════════════════
 window.addEventListener('load', () => {
   initPasswordGate();
-  loadTool('create');
+
+  // Outil par URL hash (ex: #merge depuis l'extension)
+  const hash = location.hash.replace('#', '');
+  loadTool(hash || 'create');
+
+  // Écoute les messages de l'extension Chrome
+  window.addEventListener('message', e => {
+    if (e.data && e.data.tool) loadTool(e.data.tool);
+  });
 });

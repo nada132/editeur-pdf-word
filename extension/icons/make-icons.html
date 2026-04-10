@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Générer les icônes PDF Pro</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 30px; background: #f1f5f9; }
+    h2 { color: #0f172a; margin-bottom: 20px; }
+    .icons { display: flex; gap: 30px; align-items: flex-end; margin: 20px 0; flex-wrap: wrap; }
+    canvas { border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.2); display: block; }
+    button { background: #e63946; color: white; border: none; padding: 14px 28px; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 20px; }
+    button:hover { background: #c1121f; }
+    p { color: #64748b; font-size: 14px; line-height: 1.6; }
+    .step { background: white; border-radius: 10px; padding: 16px 20px; margin-top: 16px; border-left: 4px solid #e63946; }
+  </style>
+</head>
+<body>
+<h2>🎨 Générateur d'icônes — PDF Pro Suite Extension</h2>
+<p>Cliquez sur <strong>Télécharger les 3 icônes</strong> puis copiez-les dans le dossier <code>extension/icons/</code></p>
+
+<div class="icons">
+  <div><canvas id="c128" width="128" height="128"></canvas><p style="text-align:center;margin-top:6px;font-size:12px">128×128</p></div>
+  <div><canvas id="c48"  width="48"  height="48"></canvas><p style="text-align:center;margin-top:6px;font-size:12px">48×48</p></div>
+  <div><canvas id="c16"  width="16"  height="16"></canvas><p style="text-align:center;margin-top:6px;font-size:12px">16×16</p></div>
+</div>
+
+<button onclick="downloadAll()">⬇ Télécharger les 3 icônes (icon16.png, icon48.png, icon128.png)</button>
+
+<div class="step">
+  <strong>Après téléchargement :</strong><br>
+  Déplacez les 3 fichiers PNG dans le dossier <code>extension/icons/</code> de votre projet.
+</div>
+
+<script>
+function drawIcon(canvas) {
+  const s = canvas.width;
+  const ctx = canvas.getContext('2d');
+  const r = s * 0.44;
+  const cx = s / 2, cy = s / 2;
+
+  // Fond transparent
+  ctx.clearRect(0, 0, s, s);
+
+  // Anneau dégradé
+  const ringGrad = ctx.createLinearGradient(0, 0, s, s);
+  ringGrad.addColorStop(0, '#9b59b6');
+  ringGrad.addColorStop(0.4, '#3498db');
+  ringGrad.addColorStop(0.7, '#e63946');
+  ringGrad.addColorStop(1, '#9b59b6');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = ringGrad;
+  ctx.fill();
+
+  // Cercle intérieur rouge
+  const innerR = r * 0.88;
+  const coreGrad = ctx.createLinearGradient(cx - innerR, cy - innerR, cx + innerR, cy + innerR);
+  coreGrad.addColorStop(0, '#e63946');
+  coreGrad.addColorStop(1, '#c1121f');
+  ctx.beginPath();
+  ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+  ctx.fillStyle = coreGrad;
+  ctx.fill();
+
+  // Icône document blanc
+  const dw = s * 0.38, dh = s * 0.5;
+  const dx = cx - dw / 2, dy = cy - dh / 2;
+  const fold = dw * 0.32;
+  const rad = s * 0.04;
+
+  ctx.beginPath();
+  ctx.moveTo(dx + rad, dy);
+  ctx.lineTo(dx + dw - fold, dy);
+  ctx.lineTo(dx + dw, dy + fold);
+  ctx.lineTo(dx + dw, dy + dh - rad);
+  ctx.quadraticCurveTo(dx + dw, dy + dh, dx + dw - rad, dy + dh);
+  ctx.lineTo(dx + rad, dy + dh);
+  ctx.quadraticCurveTo(dx, dy + dh, dx, dy + dh - rad);
+  ctx.lineTo(dx, dy + rad);
+  ctx.quadraticCurveTo(dx, dy, dx + rad, dy);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fill();
+
+  // Coin plié
+  ctx.beginPath();
+  ctx.moveTo(dx + dw - fold, dy);
+  ctx.lineTo(dx + dw, dy + fold);
+  ctx.lineTo(dx + dw - fold, dy + fold);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,100,100,0.5)';
+  ctx.fill();
+
+  // Texte PDF
+  if (s >= 32) {
+    const fs = s * 0.14;
+    ctx.font = `900 ${fs}px Arial`;
+    ctx.fillStyle = '#e63946';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PDF', cx, cy + dh * 0.1);
+  }
+
+  // Lignes document (si assez grand)
+  if (s >= 48) {
+    ctx.fillStyle = 'rgba(230,57,70,0.4)';
+    const lw = dw * 0.65, lx = cx - lw / 2;
+    const ly1 = cy + dh * 0.28;
+    const ly2 = cy + dh * 0.38;
+    ctx.fillRect(lx, ly1, lw, s * 0.025);
+    ctx.fillRect(lx, ly2, lw * 0.75, s * 0.025);
+  }
+}
+
+// Dessiner les 3 icônes
+['c128','c48','c16'].forEach(id => {
+  const canvas = document.getElementById(id);
+  drawIcon(canvas);
+});
+
+function downloadAll() {
+  [
+    { id: 'c128', name: 'icon128.png' },
+    { id: 'c48',  name: 'icon48.png' },
+    { id: 'c16',  name: 'icon16.png' },
+  ].forEach(({ id, name }) => {
+    const canvas = document.getElementById(id);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 100);
+  });
+}
+</script>
+</body>
+</html>
