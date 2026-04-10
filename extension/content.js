@@ -281,11 +281,16 @@
   /* ── État ── */
   let panelOpen = false;
 
-  function openPanel() {
+  function openPanel(tool) {
     panelOpen = true;
     panel.classList.add('open');
     host.style.bottom = '0';
     host.style.right = '0';
+    // Recharge l'iframe à chaque ouverture → mot de passe toujours demandé
+    const frame = shadow.getElementById('pdfFrame');
+    const url = EDITOR_URL + (tool ? '#' + tool : '');
+    frame.src = 'about:blank';
+    setTimeout(() => { frame.src = url; }, 50);
   }
 
   function closePanel() {
@@ -293,6 +298,8 @@
     panel.classList.remove('open');
     host.style.bottom = '28px';
     host.style.right = '28px';
+    // Vide l'iframe à la fermeture pour forcer re-auth à la prochaine ouverture
+    shadow.getElementById('pdfFrame').src = 'about:blank';
   }
 
   bubble.addEventListener('click', () => {
@@ -304,10 +311,7 @@
 
   /* Mini boutons → ouvrir l'éditeur sur l'outil correspondant */
   function openTool(tool) {
-    const frame = shadow.getElementById('pdfFrame');
-    openPanel();
-    frame.src = EDITOR_URL + '#' + tool;
-    setTimeout(() => { frame.contentWindow?.postMessage({ tool }, '*'); }, 800);
+    openPanel(tool);
   }
 
   shadow.getElementById('btnCreate').onclick   = () => openTool('create');
