@@ -68,9 +68,17 @@ function closeApp() {
 
 function loadTool(name) {
   currentTool = name;
+  // Sidebar desktop
   document.querySelectorAll('.sb-item').forEach(el => {
     el.classList.toggle('active', el.dataset.tool === name);
   });
+  // Nav mobile
+  document.querySelectorAll('.mobile-nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.tool === name);
+  });
+  // Scroll l'item actif dans la nav mobile
+  const activeNav = document.querySelector(`.mobile-nav-item[data-tool="${name}"]`);
+  if (activeNav) activeNav.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   const main = document.getElementById('toolContent');
   main.innerHTML = '';
   setStatus('Prêt');

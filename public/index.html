@@ -2,7 +2,11 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="theme-color" content="#1e293b"/>
   <title>PDF Pro Suite — Éditeur Complet</title>
   <link rel="stylesheet" href="styles.css"/>
   <!-- pdf-lib : manipulation PDF -->
@@ -177,6 +181,60 @@
       <!-- chargé dynamiquement -->
     </main>
   </div>
+
+  <!-- BARRE NAV MOBILE -->
+  <nav class="mobile-nav" id="mobileNav">
+    <div class="mobile-nav-inner">
+      <button class="mobile-nav-item active" data-tool="create" onclick="loadTool('create')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
+        Créer
+      </button>
+      <button class="mobile-nav-item" data-tool="edit-img" onclick="loadTool('edit-img')">
+        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.12a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        Modifier
+      </button>
+      <button class="mobile-nav-item" data-tool="fill-sign" onclick="loadTool('fill-sign')">
+        <svg viewBox="0 0 24 24"><path d="M17.75 7 14 3.25l-10 10V17h3.75l10-10zm2.96-2.96a1 1 0 0 0 0-1.41L18.37.29a1 1 0 0 0-1.41 0L15 2.25 18.75 6l1.96-1.96zM3 21h18v-2H3v2z"/></svg>
+        Signer
+      </button>
+      <button class="mobile-nav-item" data-tool="pdf-word" onclick="loadTool('pdf-word')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" fill="#2b579a"/></svg>
+        Word
+      </button>
+      <button class="mobile-nav-item" data-tool="pdf-jpg" onclick="loadTool('pdf-jpg')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15 16 10 5 21" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        JPG
+      </button>
+      <button class="mobile-nav-item" data-tool="merge" onclick="loadTool('merge')">
+        <svg viewBox="0 0 24 24"><path d="M4 6h2v2H4V6zm0 5h2v2H4v-2zm0 5h2v2H4v-2zm16-8V6H8v2h12zM8 11h12v2H8v-2zm0 5h12v2H8v-2z"/></svg>
+        Combiner
+      </button>
+      <button class="mobile-nav-item" data-tool="split" onclick="loadTool('split')">
+        <svg viewBox="0 0 24 24"><path d="M14 4l2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z"/></svg>
+        Diviser
+      </button>
+      <button class="mobile-nav-item" data-tool="compress" onclick="loadTool('compress')">
+        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+        Compresser
+      </button>
+      <button class="mobile-nav-item" data-tool="watermark" onclick="loadTool('watermark')">
+        <svg viewBox="0 0 24 24"><path d="M17.5 12a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>
+        Filigrane
+      </button>
+      <button class="mobile-nav-item" data-tool="protect" onclick="loadTool('protect')">
+        <svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+        Protéger
+      </button>
+      <button class="mobile-nav-item" data-tool="ocr" onclick="loadTool('ocr')">
+        <svg viewBox="0 0 24 24"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6z"/></svg>
+        OCR
+      </button>
+      <button class="mobile-nav-item" data-tool="ai" onclick="loadTool('ai')">
+        <svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>
+        IA
+      </button>
+    </div>
+  </nav>
 
   <!-- BARRE DE STATUT -->
   <div class="app-status">

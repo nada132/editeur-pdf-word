@@ -806,10 +806,206 @@ body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; background: var(--
 .pw-btn:hover { filter: brightness(1.1); }
 .pw-error { color: #dc2626; font-size: 13px; margin-top: 8px; display: none; }
 
-/* ── Responsive ── */
-@media (max-width: 600px) {
-  .app-sidebar { width: 52px; }
-  .sb-label, .sb-item span, .sb-item:not(.active) svg ~ * { display: none; }
-  .sb-item { padding: 10px; justify-content: center; }
-  :root { --sb-w: 52px; }
+/* ══════════════════════════════════════════
+   RESPONSIVE MOBILE (≤ 768px)
+══════════════════════════════════════════ */
+
+/* ── Sidebar → bottom nav bar sur mobile ── */
+@media (max-width: 768px) {
+  :root {
+    --sb-w: 0px;
+    --hdr-h: 44px;
+  }
+
+  /* Cache la sidebar classique */
+  .app-sidebar {
+    display: none;
+  }
+
+  /* Corps plein écran */
+  .app-body {
+    flex-direction: column;
+  }
+
+  .app-main {
+    width: 100%;
+  }
+
+  /* Barre de navigation mobile en bas */
+  .mobile-nav {
+    display: flex !important;
+  }
+
+  /* Outil header compact */
+  .tool-header {
+    padding: 12px 16px 10px;
+  }
+  .tool-header h1 {
+    font-size: 16px;
+    gap: 8px;
+  }
+  .tool-header h1 .tool-icon {
+    width: 28px; height: 28px;
+  }
+  .tool-header h1 .tool-icon svg { width: 15px; height: 15px; }
+  .tool-desc { padding-left: 36px; font-size: 12px; }
+
+  /* Corps outil */
+  .tool-body {
+    padding: 14px 14px;
+  }
+
+  /* Dropzone compact */
+  .dropzone {
+    padding: 28px 16px;
+  }
+  .dropzone-icon { font-size: 30px; }
+  .dropzone-text { font-size: 13px; }
+
+  /* Éditeur riche */
+  .rich-toolbar {
+    padding: 4px 6px;
+    gap: 2px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .rich-toolbar::-webkit-scrollbar { height: 3px; }
+  .rich-toolbar::-webkit-scrollbar-thumb { background: #cbd5e1; }
+
+  .rich-editor-wrap {
+    padding: 10px;
+  }
+  .rich-page {
+    padding: 20px 18px;
+    min-height: 500px;
+    font-size: 13px;
+  }
+
+  /* Grilles 2 colonnes → 1 colonne */
+  .tools-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .tool-card {
+    padding: 14px 10px;
+    gap: 7px;
+  }
+  .tool-card-icon { width: 38px; height: 38px; }
+  .tool-card-icon svg { width: 18px; height: 18px; }
+  .tool-card-name { font-size: 12px; }
+
+  /* Grille pages */
+  .pages-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+  }
+
+  /* Formulaires pleine largeur */
+  .form-row input,
+  .form-row select,
+  .form-row textarea {
+    font-size: 16px; /* évite zoom iOS */
+  }
+
+  /* Grilles 2 cols → 1 col */
+  div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Boutons */
+  .btn { padding: 10px 14px; font-size: 13px; }
+
+  /* Signature canvas */
+  #signatureCanvas, #esignCanvas {
+    width: 100% !important;
+    height: 140px !important;
+  }
+
+  /* Header app */
+  .app-header { padding: 0 10px; }
+  .header-title { font-size: 13px; }
+
+  /* Panel bulle extension : plein écran */
+  .panel {
+    width: 100% !important;
+    border-radius: 16px 16px 0 0 !important;
+    height: 92vh !important;
+    bottom: 0 !important;
+    top: auto !important;
+  }
+
+  /* Status bar */
+  .app-status { font-size: 10px; padding: 0 10px; }
+
+  /* Chat IA */
+  .ai-msg { max-width: 92%; }
+
+  /* Bulle flottante plus petite */
+  .pdf-bubble {
+    bottom: 16px;
+    right: 16px;
+  }
+  .bubble-ring { width: 56px; height: 56px; }
+
+  /* Result cards */
+  .result-card { padding: 14px; }
+}
+
+/* ── Très petits écrans (≤ 375px) ── */
+@media (max-width: 375px) {
+  .tools-grid {
+    grid-template-columns: 1fr;
+  }
+  .tool-header h1 { font-size: 14px; }
+  .rich-page { padding: 14px 12px; }
+}
+
+/* ── Barre nav mobile (cachée par défaut, visible mobile) ── */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--dark2);
+  border-top: 1px solid rgba(255,255,255,.08);
+  z-index: 900;
+  padding: 4px 0 env(safe-area-inset-bottom, 4px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-nav::-webkit-scrollbar { display: none; }
+
+.mobile-nav-inner {
+  display: flex;
+  min-width: max-content;
+  gap: 0;
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 14px;
+  cursor: pointer;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  border: none;
+  background: none;
+  white-space: nowrap;
+  transition: color .15s;
+  min-width: 60px;
+}
+.mobile-nav-item svg { width: 20px; height: 20px; fill: currentColor; }
+.mobile-nav-item:hover,
+.mobile-nav-item.active { color: var(--red); }
+.mobile-nav-item.active svg { filter: drop-shadow(0 0 4px rgba(230,57,70,.5)); }
+
+/* Padding bas de la zone principale sur mobile pour la nav */
+@media (max-width: 768px) {
+  .app-main { padding-bottom: 60px; }
+  .app-body  { padding-bottom: 0; }
 }
