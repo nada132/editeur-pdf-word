@@ -1775,14 +1775,31 @@ async function _loadDocxFile(file) {
   setStatus('Chargement du DOCX…');
   try {
     const arrayBuffer = await readFile(file);
+    let result;
 
-    if (typeof mammoth === 'undefined') {
-      showNotif('❌ Bibliothèque mammoth non chargée. Vérifiez votre connexion.', 'error');
-      setStatus('Erreur');
-      return;
+    // Essai via l'API serveur (Netlify function ou serveur local)
+    try {
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const resp = await fetch('/api/read-docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docxBase64: base64, filename: file.name })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        result = { value: data.html, messages: data.messages || [] };
+      }
+    } catch (_) { /* pas de serveur disponible, fallback client */ }
+
+    // Fallback : mammoth.browser.js côté client
+    if (!result) {
+      if (typeof mammoth === 'undefined') {
+        showNotif('❌ Bibliothèque mammoth non chargée. Vérifiez votre connexion.', 'error');
+        setStatus('Erreur');
+        return;
+      }
+      result = await mammoth.convertToHtml({ arrayBuffer });
     }
-
-    const result = await mammoth.convertToHtml({ arrayBuffer });
 
     const baseName = file.name.replace(/\.docx$/i, '');
     const area = document.getElementById('docxEditorArea');

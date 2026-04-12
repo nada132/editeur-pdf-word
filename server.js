@@ -32,6 +32,23 @@ app.get('/api/open-file', async (_req, res) => {
   }
 });
 
+// ---- Lire / convertir un DOCX uploadé en HTML ----
+app.post('/api/read-docx', async (req, res) => {
+  try {
+    const { docxBase64, filename } = req.body;
+    if (!docxBase64) return res.status(400).json({ error: 'Champ docxBase64 manquant' });
+
+    const mammoth = require('mammoth');
+    const buffer = Buffer.from(docxBase64, 'base64');
+    const result = await mammoth.convertToHtml({ buffer });
+
+    res.json({ html: result.value, messages: result.messages, filename: filename || 'document' });
+  } catch (err) {
+    console.error('Read DOCX error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---- Export Word (.docx) ----
 app.post('/api/export-word', async (req, res) => {
   try {
