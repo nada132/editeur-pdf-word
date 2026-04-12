@@ -399,6 +399,12 @@ body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; background: var(--
   pointer-events: none;
   white-space: pre-line;
 }
+.rich-page.img-drop-active {
+  outline: 3px dashed var(--blue);
+  outline-offset: -4px;
+  background: #f0f7ff;
+  transition: background .15s, outline .15s;
+}
 .rich-page h1 { font-size: 2em; margin: .8em 0 .4em; }
 .rich-page h2 { font-size: 1.5em; margin: .7em 0 .35em; }
 .rich-page h3 { font-size: 1.25em; margin: .6em 0 .3em; }

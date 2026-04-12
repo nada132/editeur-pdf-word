@@ -151,6 +151,47 @@ function readFileAsDataURL(file) {
   });
 }
 
+// Drag & drop d'images dans un éditeur contenteditable
+function enableImageDrop(editor) {
+  editor.addEventListener('dragover', e => {
+    const hasImg = [...(e.dataTransfer?.items || [])].some(item => item.type.startsWith('image/'));
+    if (!hasImg) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    editor.classList.add('img-drop-active');
+  });
+
+  editor.addEventListener('dragleave', e => {
+    if (!editor.contains(e.relatedTarget)) {
+      editor.classList.remove('img-drop-active');
+    }
+  });
+
+  editor.addEventListener('drop', async e => {
+    editor.classList.remove('img-drop-active');
+    const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+
+    // Positionner le curseur à l'endroit du drop
+    let range;
+    if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(e.clientX, e.clientY);
+    } else if (document.caretPositionFromPoint) {
+      const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+      if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); range.collapse(true); }
+    }
+    if (range) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); }
+
+    for (const file of files) {
+      const dataURL = await readFileAsDataURL(file);
+      document.execCommand('insertHTML', false,
+        `<img src="${dataURL}" style="max-width:100%;border-radius:4px;margin:4px 0"/>`);
+    }
+    showNotif(`✅ ${files.length} image(s) insérée(s)`);
+  });
+}
+
 function makeDropzone(container, accept, label, hint, cb) {
   const dz = document.createElement('div');
   dz.className = 'dropzone';
@@ -291,6 +332,8 @@ function renderCreate(main) {
     qs('wc').textContent = w + ' mot' + (w!==1?'s':'');
     qs('cc').textContent = t.length + ' car.';
   });
+
+  enableImageDrop(editor);
 
   document.addEventListener('keydown', function kbHandler(e) {
     if (!document.getElementById('richEditor')) { document.removeEventListener('keydown', kbHandler); return; }
@@ -1765,6 +1808,7 @@ async function _loadDocxFile(file) {
       document.getElementById('dxCc').textContent = t.length + ' car.';
     });
     editor.dispatchEvent(new Event('input'));
+    enableImageDrop(editor);
 
     // Contrôles toolbar
     const qs = id => document.getElementById(id);
