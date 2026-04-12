@@ -103,6 +103,7 @@ function loadTool(name) {
     esign:        renderEsign,
     ocr:          renderOcr,
     ai:           renderAi,
+    'edit-docx':  renderEditDocx,
   };
 
   (tools[name] || renderCreate)(main);
@@ -1634,6 +1635,215 @@ async function sendAiMsg() {
       if (question.toLowerCase().includes(k)) { reply = v; break; }
     }
     setTimeout(() => addAiMsg('bot', reply), 600);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// MODIFIER UN DOCX
+// ════════════════════════════════════════════════════════════════
+function renderEditDocx(main) {
+  main.innerHTML = `
+    <div class="tool-header">
+      <h1>
+        <span class="tool-icon">
+          <svg viewBox="0 0 24 24" fill="white">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+          </svg>
+        </span>
+        Modifier un DOCX
+      </h1>
+      <p class="tool-desc">Ouvrez un fichier .docx, modifiez le contenu et réexportez en Word ou PDF.</p>
+    </div>
+    <div id="docxDropZone"></div>
+    <div id="docxEditorArea" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div class="rich-toolbar" id="docxToolbar">
+        <select id="dx-heading" title="Style">
+          <option value="p">Normal</option>
+          <option value="h1">Titre 1</option>
+          <option value="h2">Titre 2</option>
+          <option value="h3">Titre 3</option>
+        </select>
+        <select id="dx-font" title="Police">
+          <option value="Arial">Arial</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Verdana">Verdana</option>
+        </select>
+        <select id="dx-size" title="Taille">
+          ${[10,11,12,14,16,18,20,24,28,32,36,48].map(s=>`<option value="${s}px"${s===14?' selected':''}>${s}px</option>`).join('')}
+        </select>
+        <span class="rich-sep"></span>
+        <button onclick="document.execCommand('bold')" title="Gras"><b>G</b></button>
+        <button onclick="document.execCommand('italic')" title="Italique"><i>I</i></button>
+        <button onclick="document.execCommand('underline')" title="Souligné"><u>S</u></button>
+        <button onclick="document.execCommand('strikeThrough')" title="Barré"><s>Ab</s></button>
+        <span class="rich-sep"></span>
+        <button onclick="document.execCommand('justifyLeft')" title="Gauche">⬅</button>
+        <button onclick="document.execCommand('justifyCenter')" title="Centrer">⬛</button>
+        <button onclick="document.execCommand('justifyRight')" title="Droite">➡</button>
+        <button onclick="document.execCommand('justifyFull')" title="Justifier">☰</button>
+        <span class="rich-sep"></span>
+        <button onclick="document.execCommand('insertUnorderedList')" title="Liste">• Liste</button>
+        <button onclick="document.execCommand('insertOrderedList')" title="Numérotée">1. Liste</button>
+        <span class="rich-sep"></span>
+        <input type="color" id="dx-color" value="#000000" title="Couleur texte"/>
+        <input type="color" id="dx-bg" value="#ffffff" title="Surlignage"/>
+        <span class="rich-sep"></span>
+        <input type="text" id="dx-title" placeholder="Nom du fichier..." style="border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:12px;height:26px;width:160px"/>
+        <button class="btn btn-blue" style="height:26px;padding:0 12px;font-size:12px" onclick="exportDocxWord()">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/></svg> Sauvegarder .docx
+        </button>
+        <button class="btn btn-red" style="height:26px;padding:0 12px;font-size:12px" onclick="exportDocxPDF()">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/></svg> PDF
+        </button>
+        <button class="btn btn-gray" style="height:26px;padding:0 12px;font-size:12px" onclick="docxOpenAnother()">📂 Autre fichier</button>
+      </div>
+      <div class="rich-editor-wrap" style="flex:1">
+        <div id="docxEditor" class="rich-page" contenteditable="true" spellcheck="true"></div>
+      </div>
+      <div class="editor-status">
+        <span id="dxWc">0 mots</span>
+        <span id="dxCc">0 caractères</span>
+        <span id="dxFile" style="color:var(--accent);font-weight:600"></span>
+      </div>
+    </div>
+  `;
+
+  makeDropzone(document.getElementById('docxDropZone'),
+    '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'Déposez votre fichier .docx ici',
+    'Le document s\'ouvrira directement dans l\'éditeur',
+    async files => { await _loadDocxFile(files[0]); }
+  );
+
+  // Raccourcis clavier
+  document.addEventListener('keydown', function dxKb(e) {
+    if (!document.getElementById('docxEditor')) { document.removeEventListener('keydown', dxKb); return; }
+    if (e.ctrlKey && !e.altKey) {
+      if (e.key === 'w') { e.preventDefault(); exportDocxWord(); }
+      if (e.key === 'p') { e.preventDefault(); exportDocxPDF(); }
+    }
+  });
+}
+
+async function _loadDocxFile(file) {
+  if (!file) return;
+  setStatus('Chargement du DOCX…');
+  try {
+    const arrayBuffer = await readFile(file);
+
+    if (typeof mammoth === 'undefined') {
+      showNotif('❌ Bibliothèque mammoth non chargée. Vérifiez votre connexion.', 'error');
+      setStatus('Erreur');
+      return;
+    }
+
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+
+    const baseName = file.name.replace(/\.docx$/i, '');
+    const area = document.getElementById('docxEditorArea');
+    const dropZone = document.getElementById('docxDropZone');
+    const editor = document.getElementById('docxEditor');
+    const titleInput = document.getElementById('dx-title');
+    const fileLabel = document.getElementById('dxFile');
+
+    if (!area || !editor) return;
+
+    dropZone.style.display = 'none';
+    area.style.display = 'flex';
+
+    editor.innerHTML = result.value || '<p>Document vide</p>';
+    titleInput.value = baseName;
+    fileLabel.textContent = '📄 ' + file.name;
+
+    // Compteur mots/caractères
+    editor.addEventListener('input', () => {
+      const t = editor.innerText.trim();
+      const w = t ? t.split(/\s+/).filter(x=>x).length : 0;
+      document.getElementById('dxWc').textContent = w + ' mot' + (w!==1?'s':'');
+      document.getElementById('dxCc').textContent = t.length + ' car.';
+    });
+    editor.dispatchEvent(new Event('input'));
+
+    // Contrôles toolbar
+    const qs = id => document.getElementById(id);
+    qs('dx-heading').onchange = function() { document.execCommand('formatBlock', false, this.value); editor.focus(); };
+    qs('dx-font').onchange   = function() { document.execCommand('fontName', false, this.value); editor.focus(); };
+    qs('dx-size').onchange   = function() {
+      const size = this.value;
+      document.execCommand('fontSize', false, '7');
+      document.querySelectorAll('font[size="7"]').forEach(el => { el.removeAttribute('size'); el.style.fontSize = size; });
+      editor.focus();
+    };
+    qs('dx-color').oninput = function() { document.execCommand('foreColor', false, this.value); };
+    qs('dx-bg').oninput    = function() { document.execCommand('hiliteColor', false, this.value); };
+
+    if (result.messages && result.messages.length) {
+      showNotif('⚠️ ' + result.messages.length + ' avertissement(s) à la conversion', 'info');
+    } else {
+      showNotif('✅ DOCX ouvert : ' + file.name);
+    }
+    setStatus('✅ Prêt');
+  } catch(e) {
+    showNotif('❌ Erreur lecture DOCX : ' + e.message, 'error');
+    setStatus('Erreur');
+  }
+}
+
+function docxOpenAnother() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  inp.onchange = async e => {
+    const file = e.target.files[0];
+    if (file) await _loadDocxFile(file);
+  };
+  inp.click();
+}
+
+function exportDocxWord() {
+  const editor = document.getElementById('docxEditor');
+  if (!editor || !editor.innerText.trim()) { showNotif('⚠️ Document vide.', 'error'); return; }
+  const title = (document.getElementById('dx-title')?.value || 'document').trim() || 'document';
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${editor.innerHTML}</body></html>`;
+  const blob = window.htmlDocx.asBlob(html);
+  dl(blob, sanitize(title) + '.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  showNotif('✅ DOCX sauvegardé : ' + sanitize(title) + '.docx');
+}
+
+async function exportDocxPDF() {
+  const editor = document.getElementById('docxEditor');
+  if (!editor || !editor.innerText.trim()) { showNotif('⚠️ Document vide.', 'error'); return; }
+  const btn = document.querySelector('#docxToolbar .btn-red');
+  if (btn) { btn._h = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>'; btn.disabled = true; }
+  setStatus('Génération PDF…');
+  try {
+    const title = (document.getElementById('dx-title')?.value || 'document').trim() || 'document';
+    const wrap = Object.assign(document.createElement('div'), {
+      style: 'position:fixed;top:-99999px;left:0;width:794px;padding:60px 70px;background:#fff;font-family:Arial,sans-serif;font-size:14px;line-height:1.75;color:#000'
+    });
+    wrap.innerHTML = editor.innerHTML;
+    document.body.appendChild(wrap);
+    const canvas = await html2canvas(wrap, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+    document.body.removeChild(wrap);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const margin = 15, cw = 210 - margin*2, ch = 297 - margin*2;
+    const imgH = (canvas.height / canvas.width) * cw;
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    let y = 0;
+    while (y < imgH) {
+      if (y > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', margin, margin - y, cw, imgH);
+      y += ch;
+    }
+    pdf.save(sanitize(title) + '.pdf');
+    showNotif('✅ PDF exporté : ' + sanitize(title) + '.pdf');
+  } catch(e) { showNotif('❌ Erreur : ' + e.message, 'error'); }
+  finally {
+    if (btn) { btn.innerHTML = btn._h; btn.disabled = false; }
+    setStatus('Prêt');
   }
 }
 

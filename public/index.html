@@ -19,6 +19,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- html-docx : export Word -->
   <script src="https://cdn.jsdelivr.net/npm/html-docx-js/dist/html-docx.js"></script>
+  <!-- mammoth : lecture DOCX → HTML côté navigateur -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 </head>
 <body>
 
@@ -80,6 +82,10 @@
         <div class="sb-item" data-tool="edit-img" onclick="loadTool('edit-img')">
           <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 1.42-.67.67H4v-1.25l9.06-9.06 1.25 1.25-8.39 8.39zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg>
           Modifier texte & images
+        </div>
+        <div class="sb-item" data-tool="edit-docx" onclick="loadTool('edit-docx')">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" fill="#2b579a"/><text x="7" y="18" fill="white" font-size="5" font-weight="900" font-family="Arial">W</text></svg>
+          Modifier un DOCX
         </div>
         <div class="sb-item" data-tool="annotate" onclick="loadTool('annotate')">
           <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12H7v-2h5v2zm3-4H7V8h8v2z" fill="currentColor"/></svg>
@@ -192,6 +198,10 @@
       <button class="mobile-nav-item" data-tool="edit-img" onclick="loadTool('edit-img')">
         <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.12a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
         Modifier
+      </button>
+      <button class="mobile-nav-item" data-tool="edit-docx" onclick="loadTool('edit-docx')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
+        DOCX
       </button>
       <button class="mobile-nav-item" data-tool="fill-sign" onclick="loadTool('fill-sign')">
         <svg viewBox="0 0 24 24"><path d="M17.75 7 14 3.25l-10 10V17h3.75l10-10zm2.96-2.96a1 1 0 0 0 0-1.41L18.37.29a1 1 0 0 0-1.41 0L15 2.25 18.75 6l1.96-1.96zM3 21h18v-2H3v2z"/></svg>
