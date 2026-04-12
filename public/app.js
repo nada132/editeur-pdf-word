@@ -442,37 +442,382 @@ async function exportRichWord() {
 // ════════════════════════════════════════════════════════════════
 // 2. MODIFIER TEXTE & IMAGES (ouvrir un PDF)
 // ════════════════════════════════════════════════════════════════
+// ─── ÉTAT ÉDITEUR LIBRE (Canva-style) ────────────────────────
+let _eiMode = 'select';
+let _eiSel  = null;
+let _eiDrag = null;
+
 function renderEditImg(main) {
-  toolShell(main,
-    '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 1.42-.67.67H4v-1.25l9.06-9.06 1.25 1.25-8.39 8.39zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="white"/>',
-    'Modifier texte & images', 'Ouvrez un PDF et visualisez chaque page. Modifiez votre texte et réexportez.',
-    `<div id="editZone"></div><div id="editResult"></div>`
+  main.innerHTML = `
+    <div class="tool-header">
+      <h1>
+        <span class="tool-icon">
+          <svg viewBox="0 0 24 24" fill="white">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.12a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+        </span>
+        Modifier texte &amp; images
+      </h1>
+      <p class="tool-desc">Glissez un PDF ou Word — éditez librement texte et images, comme sur Canva.</p>
+    </div>
+    <div id="eiDropZone"></div>
+    <div id="eiApp" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div class="rich-toolbar" id="eiToolbar">
+        <button id="eiModeSelect" class="ei-mode active" onclick="eiSetMode('select')" title="Sélectionner / déplacer">↖ Sélect.</button>
+        <button id="eiModeText"   class="ei-mode"        onclick="eiSetMode('text')"   title="Cliquer sur la page pour ajouter un texte">T+ Texte</button>
+        <button class="ei-mode" onclick="eiPickImage()" title="Insérer une image depuis le disque">🖼 Image</button>
+        <span class="rich-sep"></span>
+        <select id="ei-font" title="Police">
+          <option>Arial</option><option>Times New Roman</option>
+          <option>Courier New</option><option>Georgia</option><option>Verdana</option>
+        </select>
+        <select id="ei-size" title="Taille">
+          ${[10,12,14,16,18,20,24,28,32,36,48].map(s=>`<option value="${s}"${s===14?' selected':''}>${s}px</option>`).join('')}
+        </select>
+        <button onclick="eiCmd('bold')"          title="Gras"><b>G</b></button>
+        <button onclick="eiCmd('italic')"        title="Italique"><i>I</i></button>
+        <button onclick="eiCmd('underline')"     title="Souligné"><u>S</u></button>
+        <button onclick="eiCmd('justifyLeft')"   title="Gauche">⬅</button>
+        <button onclick="eiCmd('justifyCenter')" title="Centrer">⬛</button>
+        <button onclick="eiCmd('justifyRight')"  title="Droite">➡</button>
+        <input type="color" id="ei-color" value="#000000" title="Couleur texte"/>
+        <span class="rich-sep"></span>
+        <button class="btn btn-gray" style="height:26px;padding:0 10px;font-size:12px" onclick="eiDeleteSel()" title="Supprimer l'élément sélectionné (Suppr)">🗑 Suppr.</button>
+        <button class="btn btn-red"  style="height:26px;padding:0 10px;font-size:12px" onclick="eiExport()">⬇ Exporter PDF</button>
+        <button class="btn btn-blue" style="height:26px;padding:0 10px;font-size:12px" id="eiSaveDocx" onclick="eiDocxSave()" style="display:none">⬇ Sauvegarder .docx</button>
+        <button class="btn btn-gray" style="height:26px;padding:0 10px;font-size:12px" onclick="eiNewFile()">📂 Autre fichier</button>
+      </div>
+      <div class="rich-editor-wrap" id="eiWrap" style="flex:1">
+        <div id="eiPages" style="display:flex;flex-direction:column;align-items:center;gap:32px;padding:20px"></div>
+      </div>
+    </div>
+  `;
+
+  makeDropzone(
+    document.getElementById('eiDropZone'),
+    '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'Glissez votre PDF ou Word (.docx) ici',
+    'Le document s\'ouvre en mode édition libre — déplacez, redimensionnez, ajoutez des éléments',
+    async files => { await eiLoad(files[0]); }
   );
-  const zone = document.getElementById('editZone');
-  makeDropzone(zone, '.pdf,application/pdf', 'Déposez un PDF ici pour l\'ouvrir', 'Formats acceptés : PDF', async files => {
-    const ab = await readFile(files[0]);
-    setStatus('Chargement des pages…');
-    const pages = await renderPdfPages(ab, null, 1.4);
-    const res = document.getElementById('editResult');
-    res.innerHTML = `<p style="color:var(--muted);font-size:13px;margin:16px 0">${pages.length} page(s) — cliquez sur une page pour la copier comme image</p><div class="pdf-preview-wrap" id="pdfPagesWrap"></div>`;
-    const wrap = document.getElementById('pdfPagesWrap');
-    pages.forEach(({canvas, pageNum}) => {
-      const div = document.createElement('div');
-      div.className = 'pdf-preview-page';
-      div.appendChild(canvas);
-      const btn = document.createElement('button');
-      btn.className = 'dl-btn'; btn.textContent = `⬇ Page ${pageNum}`;
-      btn.onclick = () => {
-        const a = document.createElement('a');
-        a.href = canvas.toDataURL('image/png');
-        a.download = `page_${pageNum}.png`;
-        a.click();
-      };
-      div.appendChild(btn);
-      wrap.appendChild(div);
-    });
-    setStatus(`✅ ${pages.length} pages chargées`);
+
+  // Toolbar color/font events
+  document.getElementById('ei-font').onchange = function() { eiCmd('fontName', this.value); };
+  document.getElementById('ei-size').onchange = function() {
+    const sz = this.value + 'px';
+    document.execCommand('fontSize', false, '7');
+    document.querySelectorAll('font[size="7"]').forEach(el => { el.removeAttribute('size'); el.style.fontSize = sz; });
+  };
+  document.getElementById('ei-color').oninput = function() { eiCmd('foreColor', this.value); };
+
+  // Deselect when clicking empty wrapper
+  document.getElementById('eiWrap').addEventListener('mousedown', e => {
+    if (e.target === document.getElementById('eiWrap') || e.target === document.getElementById('eiPages'))
+      eiDeselect();
   });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function eiKb(e) {
+    if (!document.getElementById('eiPages')) { document.removeEventListener('keydown', eiKb); return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && _eiSel && !_eiSel.dataset.editing) {
+      e.preventDefault(); eiDeleteSel();
+    }
+    if (e.key === 'Escape') { if (_eiSel?.dataset.editing) eiExitEdit(_eiSel); else eiDeselect(); }
+  });
+}
+
+// ── Chargement du fichier ──────────────────────────────────────
+async function eiLoad(file) {
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  const isPdf  = name.endsWith('.pdf')  || file.type === 'application/pdf';
+  const isDocx = name.endsWith('.docx');
+  if (!isPdf && !isDocx) { showNotif('❌ Format non supporté — PDF ou DOCX uniquement', 'error'); return; }
+
+  _eiSel = null; _eiMode = 'select';
+  document.getElementById('eiDropZone').style.display = 'none';
+  document.getElementById('eiApp').style.display = 'flex';
+  document.getElementById('eiPages').innerHTML =
+    '<p style="color:var(--muted);font-size:13px;padding:20px">Chargement…</p>';
+  document.getElementById('eiSaveDocx').style.display = isDocx ? '' : 'none';
+
+  setStatus('Chargement…');
+  try {
+    const ab = await readFile(file);
+    if (isPdf)  await eiLoadPdf(ab, file.name);
+    else        await eiLoadDocx(ab, file.name);
+  } catch(e) { showNotif('❌ ' + e.message, 'error'); setStatus('Erreur'); }
+}
+
+async function eiLoadPdf(ab, fname) {
+  const wrap = document.getElementById('eiPages');
+  wrap.innerHTML = '';
+  const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+  setStatus(`Rendu de ${pdf.numPages} page(s)…`);
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page     = await pdf.getPage(i);
+    const scale    = 1.4;
+    const viewport = page.getViewport({ scale });
+    const canvas   = document.createElement('canvas');
+    canvas.width   = viewport.width; canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    eiMakePage(wrap, canvas.toDataURL('image/jpeg', 0.92), viewport.width, viewport.height, i, pdf.numPages);
+  }
+  showNotif(`✅ ${pdf.numPages} page(s) — cliquez sur T+ pour ajouter du texte`);
+  setStatus('✅ Prêt');
+}
+
+async function eiLoadDocx(ab, fname) {
+  const wrap = document.getElementById('eiPages');
+  wrap.innerHTML = '';
+  let html = '';
+
+  try {
+    const b64  = btoa(String.fromCharCode(...new Uint8Array(ab)));
+    const resp = await fetch('/api/read-docx', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docxBase64: b64, filename: fname })
+    });
+    if (resp.ok) html = (await resp.json()).html || '';
+  } catch(_) {}
+
+  if (!html && typeof mammoth !== 'undefined') {
+    html = (await mammoth.convertToHtml({ arrayBuffer: ab })).value;
+  }
+  if (!html) { showNotif('❌ Impossible de lire ce DOCX', 'error'); return; }
+
+  const pageDiv = document.createElement('div');
+  pageDiv.className = 'ei-page ei-docx-page';
+  pageDiv.contentEditable = 'true';
+  pageDiv.spellcheck = true;
+  pageDiv.innerHTML  = html;
+  enableImageDrop(pageDiv);
+  wrap.appendChild(pageDiv);
+  showNotif('✅ Document Word ouvert — édition directe');
+  setStatus('✅ Prêt');
+}
+
+// ── Création d'une page (fond + zone overlay) ──────────────────
+function eiMakePage(container, bgDataURL, w, h, num, total) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative';
+
+  const page = document.createElement('div');
+  page.className = 'ei-page';
+  page.dataset.page = num;
+  page.style.cssText = `width:${w}px;height:${h}px`;
+
+  const bg = document.createElement('img');
+  bg.src = bgDataURL;
+  bg.className = 'ei-bg';
+  bg.draggable = false;
+  page.appendChild(bg);
+
+  page.addEventListener('click', e => {
+    if (e.target.closest('.ei-element')) return;
+    if (_eiMode === 'text') eiAddText(page, e.offsetX, e.offsetY);
+    else eiDeselect();
+  });
+
+  if (total > 1) {
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'text-align:center;font-size:11px;color:#94a3b8;margin-top:6px';
+    lbl.textContent = `Page ${num} / ${total}`;
+    wrap.appendChild(page); wrap.appendChild(lbl);
+  } else {
+    wrap.appendChild(page);
+  }
+  container.appendChild(wrap);
+  return page;
+}
+
+// ── Mode d'édition ─────────────────────────────────────────────
+function eiSetMode(m) {
+  _eiMode = m;
+  document.querySelectorAll('.ei-mode').forEach(b => b.classList.remove('active'));
+  const id = m === 'text' ? 'eiModeText' : 'eiModeSelect';
+  document.getElementById(id)?.classList.add('active');
+  document.querySelectorAll('.ei-page').forEach(p => { p.style.cursor = m === 'text' ? 'text' : 'default'; });
+  if (m !== 'text') eiDeselect();
+}
+
+// ── Ajouter un texte ───────────────────────────────────────────
+function eiAddText(page, x, y) {
+  const el = document.createElement('div');
+  el.className = 'ei-element ei-text';
+  el.dataset.editing = '';
+  el.textContent = 'Votre texte ici';
+  el.style.cssText =
+    `left:${Math.round(x)}px;top:${Math.round(y)}px;min-width:140px;` +
+    `font-family:Arial,sans-serif;font-size:14px;color:#000;background:transparent;` +
+    `padding:4px 6px;white-space:pre-wrap;cursor:text`;
+  page.appendChild(el);
+  eiWire(el, page);
+  eiSelect(el);
+  eiEnterEdit(el);
+  eiSetMode('select');
+}
+
+// ── Insérer une image (fichier) ────────────────────────────────
+function eiPickImage() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    const page = document.querySelector('.ei-page:not(.ei-docx-page)') ||
+                 document.querySelector('.ei-page');
+    if (!page) { showNotif('⚠️ Ouvrez d\'abord un document', 'error'); return; }
+    const dataURL = await readFileAsDataURL(file);
+    const el = document.createElement('div');
+    el.className = 'ei-element ei-img-el';
+    el.style.cssText = 'left:60px;top:60px;width:240px;height:180px;overflow:hidden';
+    const img = document.createElement('img');
+    img.src = dataURL;
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;pointer-events:none;display:block';
+    el.appendChild(img);
+    page.appendChild(el);
+    eiWire(el, page);
+    eiSelect(el);
+    showNotif('✅ Image insérée — glissez pour repositionner');
+  };
+  inp.click();
+}
+
+// ── Interaction (drag, resize, select) ────────────────────────
+function eiWire(el, page) {
+  // Double-clic → éditer texte
+  el.addEventListener('dblclick', e => {
+    if (el.classList.contains('ei-text')) { e.stopPropagation(); eiEnterEdit(el); }
+  });
+
+  // Mousedown → drag (sauf si on édite ou si on clique sur un handle)
+  el.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('ei-rh')) return;
+    if (el.dataset.editing !== undefined && el.dataset.editing !== '') return; // en cours d'édition
+    e.preventDefault();
+    eiSelect(el);
+    _eiDrag = { el, sx: e.clientX, sy: e.clientY, ol: parseInt(el.style.left)||0, ot: parseInt(el.style.top)||0 };
+    document.addEventListener('mousemove', eiDragMove);
+    document.addEventListener('mouseup',   eiDragEnd, { once: true });
+  });
+
+  el.addEventListener('click', e => { e.stopPropagation(); eiSelect(el); });
+
+  // Handles de redimensionnement
+  ['nw','n','ne','e','se','s','sw','w'].forEach(pos => {
+    const h = document.createElement('div');
+    h.className = 'ei-rh ei-rh-' + pos;
+    el.appendChild(h);
+    h.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const sx = e.clientX, sy = e.clientY;
+      const ow = el.offsetWidth, oh = el.offsetHeight;
+      const ol = parseInt(el.style.left)||0, ot = parseInt(el.style.top)||0;
+      function mv(e) {
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (pos.includes('e')) el.style.width  = Math.max(60, ow+dx)+'px';
+        if (pos.includes('s')) el.style.height = Math.max(24, oh+dy)+'px';
+        if (pos.includes('w')) { const nw=Math.max(60,ow-dx); el.style.width=nw+'px'; el.style.left=(ol+ow-nw)+'px'; }
+        if (pos.includes('n')) { const nh=Math.max(24,oh-dy); el.style.height=nh+'px'; el.style.top=(ot+oh-nh)+'px'; }
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', () => document.removeEventListener('mousemove', mv), { once: true });
+    });
+  });
+}
+
+function eiDragMove(e) {
+  if (!_eiDrag) return;
+  _eiDrag.el.style.left = (_eiDrag.ol + e.clientX - _eiDrag.sx) + 'px';
+  _eiDrag.el.style.top  = (_eiDrag.ot + e.clientY - _eiDrag.sy) + 'px';
+}
+function eiDragEnd() {
+  _eiDrag = null;
+  document.removeEventListener('mousemove', eiDragMove);
+}
+
+// ── Édition de texte ───────────────────────────────────────────
+function eiEnterEdit(el) {
+  el.dataset.editing = '1';
+  el.contentEditable = 'true';
+  el.style.cursor    = 'text';
+  el.classList.add('ei-editing');
+  el.focus();
+  const r = document.createRange(); r.selectNodeContents(el);
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+function eiExitEdit(el) {
+  delete el.dataset.editing;
+  el.contentEditable = 'false';
+  el.style.cursor    = 'move';
+  el.classList.remove('ei-editing');
+}
+
+// ── Sélection ──────────────────────────────────────────────────
+function eiSelect(el) {
+  eiDeselect();
+  _eiSel = el;
+  el.classList.add('ei-selected');
+}
+function eiDeselect() {
+  if (_eiSel) {
+    if (_eiSel.dataset.editing) eiExitEdit(_eiSel);
+    _eiSel.classList.remove('ei-selected');
+    _eiSel = null;
+  }
+}
+function eiDeleteSel() {
+  if (_eiSel) { _eiSel.remove(); _eiSel = null; }
+}
+function eiCmd(cmd, val) { document.execCommand(cmd, false, val || undefined); }
+
+// ── Export PDF ─────────────────────────────────────────────────
+async function eiExport() {
+  const pages = [...document.querySelectorAll('.ei-page')];
+  if (!pages.length) { showNotif('⚠️ Aucun document chargé', 'error'); return; }
+  eiDeselect();
+  // Cache les bordures de sélection
+  document.querySelectorAll('.ei-element').forEach(el => el.classList.add('ei-exporting'));
+  setStatus('Génération PDF…');
+  try {
+    const { jsPDF } = window.jspdf;
+    let pdf = null;
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await html2canvas(pages[i], { scale: 1.5, useCORS: true, backgroundColor: '#fff', allowTaint: true });
+      const wMm = canvas.width  / 1.5 * 0.2646;
+      const hMm = canvas.height / 1.5 * 0.2646;
+      if (!pdf) {
+        pdf = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation: wMm > hMm ? 'l' : 'p' });
+      } else {
+        pdf.addPage([wMm, hMm], wMm > hMm ? 'l' : 'p');
+      }
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wMm, hMm);
+    }
+    pdf.save('document-modifie.pdf');
+    showNotif('✅ PDF exporté');
+  } catch(e) { showNotif('❌ ' + e.message, 'error'); }
+  finally {
+    document.querySelectorAll('.ei-element').forEach(el => el.classList.remove('ei-exporting'));
+    setStatus('Prêt');
+  }
+}
+
+// ── Sauvegarder DOCX ───────────────────────────────────────────
+function eiDocxSave() {
+  const page = document.querySelector('.ei-page.ei-docx-page');
+  if (!page) return;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${page.innerHTML}</body></html>`;
+  const blob = window.htmlDocx.asBlob(html);
+  dl(blob, 'document-modifie.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  showNotif('✅ DOCX sauvegardé');
+}
+
+// ── Nouveau fichier ────────────────────────────────────────────
+function eiNewFile() {
+  _eiSel = null; _eiMode = 'select';
+  document.getElementById('eiDropZone').style.display = '';
+  document.getElementById('eiApp').style.display = 'none';
+  document.getElementById('eiPages').innerHTML = '';
 }
 
 // ════════════════════════════════════════════════════════════════
