@@ -821,44 +821,282 @@ function eiNewFile() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// 3. ANNOTER & COMMENTER
+// 3. MODIFIER & ANNOTER UN PDF
 // ════════════════════════════════════════════════════════════════
+let _annMode = 'edit';
+
 function renderAnnotate(main) {
-  toolShell(main,
-    '<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12H7v-2h5v2zm3-4H7V8h8v2z" fill="white"/>',
-    'Annoter & Commenter', 'Ouvrez un PDF et ajoutez des commentaires, surlignages et notes.',
-    `<div id="annZone"></div>
-     <div id="annToolbar" style="display:none;margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"></div>
-     <div id="annCanvas" style="margin-top:16px;position:relative"></div>`
+  main.innerHTML = `
+    <div class="tool-header">
+      <h1>
+        <span class="tool-icon">
+          <svg viewBox="0 0 24 24" fill="white">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12H7v-2h5v2zm3-4H7V8h8v2z"/>
+          </svg>
+        </span>
+        Modifier &amp; Annoter un PDF
+      </h1>
+      <p class="tool-desc">Cliquez directement sur le texte du PDF pour le modifier. Mode note pour ajouter des commentaires flottants.</p>
+    </div>
+    <div id="annDrop"></div>
+    <div id="annApp" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div class="rich-toolbar">
+        <button class="ei-mode active" id="annModeEdit" onclick="annSetMode('edit')" title="Cliquer sur le texte pour le modifier directement">✏️ Modifier texte</button>
+        <button class="ei-mode"        id="annModeNote" onclick="annSetMode('note')" title="Cliquer sur la page pour ajouter une note flottante">💬 Ajouter note</button>
+        <span class="rich-sep"></span>
+        <select id="ann-font" title="Police">
+          <option>Arial</option><option>Times New Roman</option><option>Courier New</option><option>Georgia</option>
+        </select>
+        <select id="ann-size" title="Taille">
+          ${[8,9,10,11,12,14,16,18,20,24,28,32].map(s=>`<option value="${s}"${s===12?' selected':''}>${s}px</option>`).join('')}
+        </select>
+        <button onclick="document.execCommand('bold')"      title="Gras"><b>G</b></button>
+        <button onclick="document.execCommand('italic')"    title="Italique"><i>I</i></button>
+        <button onclick="document.execCommand('underline')" title="Souligné"><u>S</u></button>
+        <input type="color" id="ann-color" value="#000000" title="Couleur texte"/>
+        <span class="rich-sep"></span>
+        <button class="btn btn-red"  style="height:26px;padding:0 10px;font-size:12px" onclick="annExport()">⬇ Exporter PDF</button>
+        <button class="btn btn-gray" style="height:26px;padding:0 10px;font-size:12px" onclick="annNewFile()">📂 Autre fichier</button>
+      </div>
+      <div class="rich-editor-wrap" id="annWrap" style="flex:1">
+        <div id="annPages" style="display:flex;flex-direction:column;align-items:center;gap:32px;padding:20px"></div>
+      </div>
+    </div>
+  `;
+
+  makeDropzone(
+    document.getElementById('annDrop'),
+    '.pdf,application/pdf',
+    'Glissez votre PDF ici',
+    'Le texte de chaque page devient directement modifiable — comme dans Acrobat',
+    async files => { await annLoad(files[0]); }
   );
-  const zone = document.getElementById('annZone');
-  makeDropzone(zone, '.pdf,application/pdf', 'Déposez un PDF ici', 'PDF accepté', async files => {
-    const ab = await readFile(files[0]);
-    const pages = await renderPdfPages(ab, null, 1.3);
-    const wrap = document.getElementById('annCanvas');
-    wrap.innerHTML = `<p style="color:var(--muted);font-size:13px;margin-bottom:12px">Cliquez sur une zone pour ajouter une note (${pages.length} pages)</p>`;
-    pages.forEach(({canvas, pageNum}) => {
+
+  document.getElementById('ann-font').onchange = function() { document.execCommand('fontName', false, this.value); };
+  document.getElementById('ann-size').onchange = function() {
+    const sz = this.value + 'px';
+    document.execCommand('fontSize', false, '7');
+    document.querySelectorAll('font[size="7"]').forEach(el => { el.removeAttribute('size'); el.style.fontSize = sz; });
+  };
+  document.getElementById('ann-color').oninput = function() { document.execCommand('foreColor', false, this.value); };
+
+  document.addEventListener('keydown', function annKb(e) {
+    if (!document.getElementById('annPages')) { document.removeEventListener('keydown', annKb); return; }
+    if (e.key === 'Escape') document.querySelectorAll('.ann-block[contenteditable="true"]').forEach(annExitBlock);
+  });
+}
+
+async function annLoad(file) {
+  if (!file) return;
+  _annMode = 'edit';
+  document.getElementById('annModeEdit').classList.add('active');
+  document.getElementById('annModeNote').classList.remove('active');
+  document.getElementById('annDrop').style.display = 'none';
+  document.getElementById('annApp').style.display = 'flex';
+  document.getElementById('annPages').innerHTML =
+    '<p style="color:var(--muted);font-size:13px;padding:20px">Rendu du PDF en cours…</p>';
+  setStatus('Chargement…');
+  try {
+    const ab  = await readFile(file);
+    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    const pagesEl = document.getElementById('annPages');
+    pagesEl.innerHTML = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page     = await pdf.getPage(i);
+      const scale    = 1.4;
+      const viewport = page.getViewport({ scale });
+
+      // Rendu canvas → image de fond
+      const canvas   = document.createElement('canvas');
+      canvas.width   = viewport.width; canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+      // Conteneur de page
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative';
       const pageDiv = document.createElement('div');
-      pageDiv.style.cssText = 'position:relative;margin-bottom:24px;display:inline-block;cursor:crosshair';
-      pageDiv.appendChild(canvas);
-      canvas.onclick = function(e) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left, y = e.clientY - rect.top;
-        const note = prompt('Entrez votre commentaire :');
-        if (!note) return;
-        const tag = Object.assign(document.createElement('div'), {
-          textContent: '💬 ' + note,
-          style: `position:absolute;left:${x}px;top:${y}px;background:#fef08a;border:1px solid #ca8a04;padding:4px 8px;border-radius:6px;font-size:12px;max-width:200px;word-wrap:break-word;cursor:move;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.15)`
-        });
-        makeDraggable(tag);
-        pageDiv.appendChild(tag);
-      };
-      const lbl = document.createElement('p');
-      lbl.textContent = `Page ${pageNum}`;
-      lbl.style.cssText = 'text-align:center;font-size:11px;color:var(--muted);margin-top:4px';
-      wrap.appendChild(pageDiv); wrap.appendChild(lbl);
+      pageDiv.className = 'ei-page';
+      pageDiv.style.cssText = `width:${viewport.width}px;height:${viewport.height}px`;
+
+      const bg = document.createElement('img');
+      bg.src = canvas.toDataURL('image/jpeg', 0.92);
+      bg.className = 'ei-bg'; bg.draggable = false;
+      pageDiv.appendChild(bg);
+
+      // Overlays texte éditables
+      const textContent = await page.getTextContent();
+      annBuildOverlays(pageDiv, textContent, viewport, scale);
+
+      // Clic page → note flottante si mode "note"
+      pageDiv.addEventListener('click', e => {
+        if (_annMode !== 'note') return;
+        if (e.target.closest('.ann-block') || e.target.closest('.ei-element')) return;
+        annAddNote(pageDiv, e.offsetX, e.offsetY);
+      });
+
+      wrap.appendChild(pageDiv);
+      if (pdf.numPages > 1) {
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'text-align:center;font-size:11px;color:#94a3b8;margin-top:6px';
+        lbl.textContent = `Page ${i} / ${pdf.numPages}`;
+        wrap.appendChild(lbl);
+      }
+      pagesEl.appendChild(wrap);
+      setStatus(`Page ${i} / ${pdf.numPages}…`);
+    }
+    showNotif(`✅ ${pdf.numPages} page(s) — cliquez sur n'importe quel texte pour le modifier`);
+    setStatus('✅ Prêt');
+  } catch(e) { showNotif('❌ ' + e.message, 'error'); setStatus('Erreur'); }
+}
+
+function annBuildOverlays(pageDiv, textContent, viewport, scale) {
+  // Grouper les items par ligne (même y à 4px près)
+  const lines = new Map();
+  textContent.items.forEach(item => {
+    if (!item.str) return;
+    const [, , , d, tx, ty] = item.transform;
+    const yCanvas  = viewport.height - ty * scale;
+    const bucket   = Math.round(yCanvas / 4) * 4;
+    if (!lines.has(bucket)) lines.set(bucket, []);
+    lines.get(bucket).push({
+      str:      item.str,
+      x:        tx * scale,
+      yCanvas,
+      fontSize: Math.max(7, Math.abs(d) * scale),
+      w:        (item.width || 0) * scale
     });
   });
+
+  lines.forEach(items => {
+    items.sort((a, b) => a.x - b.x);
+    const text = items.map(i => i.str).join('');
+    if (!text.trim()) return;
+
+    const first    = items[0];
+    const last     = items[items.length - 1];
+    const fontSize = first.fontSize;
+    const x        = Math.round(first.x);
+    const y        = Math.round(first.yCanvas - fontSize * 1.05);
+    const w        = Math.round(last.x + last.w - first.x + 16);
+
+    const div = document.createElement('div');
+    div.className     = 'ann-block';
+    div.dataset.orig  = text;
+    div.textContent   = text;
+    div.style.cssText =
+      `position:absolute;left:${x}px;top:${y}px;` +
+      `min-width:${Math.max(w, 20)}px;` +
+      `font-size:${Math.round(fontSize)}px;line-height:1.25;` +
+      `font-family:Arial,sans-serif;` +
+      `color:transparent;background:transparent;` +
+      `padding:1px 3px;white-space:nowrap;` +
+      `border:1px solid transparent;border-radius:2px;` +
+      `cursor:text;z-index:5;box-sizing:border-box;`;
+
+    div.addEventListener('mouseenter', () => {
+      if (div.contentEditable !== 'true')
+        div.style.outline = '1.5px dashed rgba(41,128,185,.55)';
+    });
+    div.addEventListener('mouseleave', () => {
+      if (div.contentEditable !== 'true') div.style.outline = '';
+    });
+    div.addEventListener('click', e => {
+      if (_annMode !== 'edit') return;
+      e.stopPropagation();
+      document.querySelectorAll('.ann-block[contenteditable="true"]').forEach(b => { if (b !== div) annExitBlock(b); });
+      annEnterBlock(div);
+    });
+    div.addEventListener('blur', () => annExitBlock(div));
+    div.addEventListener('keydown', e => { if (e.key === 'Escape') { annExitBlock(div); div.blur(); } });
+    pageDiv.appendChild(div);
+  });
+}
+
+function annEnterBlock(div) {
+  div.contentEditable = 'true';
+  div.style.color      = '#000';
+  div.style.background = 'white';
+  div.style.outline    = '2px solid #2980b9';
+  div.style.cursor     = 'text';
+  div.style.zIndex     = '20';
+  div.focus();
+  const r = document.createRange(); r.selectNodeContents(div);
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+
+function annExitBlock(div) {
+  div.contentEditable = 'false';
+  div.style.cursor    = 'text';
+  div.style.outline   = '';
+  div.style.zIndex    = '5';
+  // Si le texte n'a pas changé → transparent (le fond canvas suffit)
+  if (div.textContent === div.dataset.orig) {
+    div.style.color      = 'transparent';
+    div.style.background = 'transparent';
+  }
+}
+
+function annSetMode(m) {
+  _annMode = m;
+  document.getElementById('annModeEdit').classList.toggle('active', m === 'edit');
+  document.getElementById('annModeNote').classList.toggle('active', m === 'note');
+  document.querySelectorAll('#annPages .ei-page').forEach(p => {
+    p.style.cursor = m === 'note' ? 'crosshair' : 'default';
+  });
+}
+
+function annAddNote(page, x, y) {
+  const note = prompt('Commentaire :');
+  if (!note) return;
+  const tag = document.createElement('div');
+  tag.className = 'ei-element';
+  tag.textContent = '💬 ' + note;
+  tag.style.cssText =
+    `position:absolute;left:${x}px;top:${y}px;background:#fef08a;` +
+    `border:1px solid #ca8a04;padding:4px 8px;border-radius:6px;` +
+    `font-size:12px;max-width:220px;word-wrap:break-word;cursor:move;` +
+    `z-index:15;box-shadow:0 2px 6px rgba(0,0,0,.15)`;
+  makeDraggable(tag);
+  page.appendChild(tag);
+}
+
+async function annExport() {
+  const pages = [...document.querySelectorAll('#annPages .ei-page')];
+  if (!pages.length) { showNotif('⚠️ Aucun document chargé', 'error'); return; }
+
+  // Préparer : blocs non modifiés → cachés, modifiés → blancs opaque
+  document.querySelectorAll('.ann-block').forEach(b => {
+    annExitBlock(b);
+    if (b.textContent === b.dataset.orig) b.style.display = 'none';
+    else { b.style.color = '#000'; b.style.background = 'white'; b.style.outline = ''; }
+  });
+
+  setStatus('Export PDF…');
+  try {
+    const { jsPDF } = window.jspdf;
+    let pdf = null;
+    for (const page of pages) {
+      const c    = await html2canvas(page, { scale: 1.5, useCORS: true, backgroundColor: '#fff', allowTaint: true });
+      const wMm  = c.width / 1.5 * 0.2646, hMm = c.height / 1.5 * 0.2646;
+      if (!pdf) pdf = new jsPDF({ unit: 'mm', format: [wMm, hMm], orientation: wMm > hMm ? 'l' : 'p' });
+      else pdf.addPage([wMm, hMm], wMm > hMm ? 'l' : 'p');
+      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wMm, hMm);
+    }
+    pdf.save('document-modifie.pdf');
+    showNotif('✅ PDF exporté avec les modifications');
+  } catch(e) { showNotif('❌ ' + e.message, 'error'); }
+  finally {
+    document.querySelectorAll('.ann-block').forEach(b => { b.style.display = ''; });
+    setStatus('Prêt');
+  }
+}
+
+function annNewFile() {
+  _annMode = 'edit';
+  document.getElementById('annDrop').style.display = '';
+  document.getElementById('annApp').style.display  = 'none';
+  document.getElementById('annPages').innerHTML = '';
 }
 
 function makeDraggable(el) {
