@@ -64,6 +64,109 @@ function toggleApp() {
 function closeApp() {
   appOpen = false;
   document.getElementById('pdfApp').style.display = 'none';
+  closeMobileCategory();
+}
+
+// ─── NAVIGATION MOBILE PAR CATÉGORIES ────────────────────────
+const mobileCategories = {
+  edit: {
+    label: 'Créer & Éditer',
+    tools: [
+      { tool: 'create',     label: 'Créer PDF',         svg: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" fill="currentColor"/></svg>' },
+      { tool: 'edit-img',   label: 'Texte & images',    svg: '<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.12a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg>' },
+      { tool: 'edit-docx',  label: 'Modifier DOCX',     svg: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" fill="#2b579a"/><text x="7" y="18" fill="white" font-size="5" font-weight="900" font-family="Arial">W</text></svg>' },
+      { tool: 'annotate',   label: 'Annoter',           svg: '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12H7v-2h5v2zm3-4H7V8h8v2z" fill="currentColor"/></svg>' },
+      { tool: 'fill-sign',  label: 'Remplir & Signer',  svg: '<svg viewBox="0 0 24 24"><path d="M17.75 7 14 3.25l-10 10V17h3.75l10-10zm2.96-2.96a1 1 0 0 0 0-1.41L18.37.29a1 1 0 0 0-1.41 0L15 2.25 18.75 6l1.96-1.96zM3 21h18v-2H3v2z" fill="currentColor"/></svg>' },
+    ]
+  },
+  convert: {
+    label: 'Convertir',
+    tools: [
+      { tool: 'pdf-word',  label: 'PDF en Word',   svg: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" fill="#2b579a"/><text x="7" y="18" fill="white" font-size="5" font-weight="900" font-family="Arial">W</text></svg>' },
+      { tool: 'pdf-jpg',   label: 'PDF en JPG',    svg: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="#ff9800"/><circle cx="8.5" cy="8.5" r="1.5" fill="white"/><path d="M21 15 16 10 5 21" stroke="white" fill="none" stroke-width="1.5"/></svg>' },
+      { tool: 'img-pdf',   label: 'Image en PDF',  svg: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" fill="#4caf50"/><path d="M9 12 l2 2 l4-4" stroke="white" fill="none" stroke-width="1.5"/></svg>' },
+      { tool: 'html-pdf',  label: 'HTML en PDF',   svg: '<svg viewBox="0 0 24 24"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="#f44336"/></svg>' },
+    ]
+  },
+  organize: {
+    label: 'Organiser',
+    tools: [
+      { tool: 'merge',    label: 'Combiner',        svg: '<svg viewBox="0 0 24 24"><path d="M4 6h2v2H4V6zm0 5h2v2H4v-2zm0 5h2v2H4v-2zm16-8V6H8v2h12zM8 11h12v2H8v-2zm0 5h12v2H8v-2z" fill="currentColor"/></svg>' },
+      { tool: 'split',    label: 'Diviser',         svg: '<svg viewBox="0 0 24 24"><path d="M14 4l2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4h-6zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3L10 4z" fill="currentColor"/></svg>' },
+      { tool: 'organize', label: 'Org. pages',      svg: '<svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" fill="currentColor"/></svg>' },
+      { tool: 'rotate',   label: 'Rotation',        svg: '<svg viewBox="0 0 24 24"><path d="M12 6v3l4-4-4-4v3a8 8 0 0 0-8 8c0 2.21.9 4.21 2.36 5.65L5.77 15.1A6 6 0 0 1 12 6zm5.64 1.35L17.23 8.9A6 6 0 0 1 12 18v-3l-4 4 4 4v-3a8 8 0 0 0 8-8c0-2.21-.9-4.21-2.36-5.65z" fill="currentColor"/></svg>' },
+    ]
+  },
+  optimize: {
+    label: 'Optimiser',
+    tools: [
+      { tool: 'compress',      label: 'Compresser',       svg: '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z" fill="currentColor"/></svg>' },
+      { tool: 'watermark',     label: 'Filigrane',        svg: '<svg viewBox="0 0 24 24"><path d="M17.5 12a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="currentColor" stroke-width="1.3"/></svg>' },
+      { tool: 'header-footer', label: 'En-têtes & Pieds', svg: '<svg viewBox="0 0 24 24"><path d="M3 4h18v2H3V4zm0 14h18v2H3v-2zM3 9h12v2H3V9zm0 4h12v2H3v-2z" fill="currentColor"/></svg>' },
+    ]
+  },
+  security: {
+    label: 'Sécurité',
+    tools: [
+      { tool: 'protect', label: 'Mot de passe',   svg: '<svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4 6 2.67V11c0 3.45-2.34 6.9-6 8-3.66-1.1-6-4.55-6-8V7.67L12 5z" fill="currentColor"/></svg>' },
+      { tool: 'esign',   label: 'Signature élec.', svg: '<svg viewBox="0 0 24 24"><path d="M17.75 7 14 3.25l-3 3 3.75 3.75 3-3zM3 17.25V21h3.75l8.06-8.06-3.75-3.75L3 17.25z" fill="currentColor"/></svg>' },
+      { tool: 'ocr',     label: 'OCR — Texte',    svg: '<svg viewBox="0 0 24 24"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5z" fill="currentColor"/></svg>' },
+      { tool: 'ai',      label: 'Assistant IA',   svg: '<svg viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2zm0 7a5 5 0 0 0-5 5v4h10v-4a5 5 0 0 0-5-5zm-2 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" fill="currentColor"/></svg>' },
+    ]
+  }
+};
+
+function toggleMobileCategory(cat) {
+  const panel   = document.getElementById('mobileCategoryPanel');
+  const overlay = document.getElementById('mobilePanelOverlay');
+  const grid    = document.getElementById('mobilePanelGrid');
+  const title   = document.getElementById('mobilePanelTitle');
+  const btn     = document.querySelector(`.mobile-tab[data-cat="${cat}"]`);
+  const isOpen  = panel.classList.contains('open');
+  const isSame  = btn && btn.classList.contains('cat-active');
+
+  // Même catégorie déjà ouverte → fermer
+  if (isOpen && isSame) { closeMobileCategory(); return; }
+
+  // Mise à jour onglets actifs
+  document.querySelectorAll('.mobile-tab').forEach(b => b.classList.remove('cat-active'));
+  if (btn) btn.classList.add('cat-active');
+
+  // Construction du contenu du panel
+  const catData = mobileCategories[cat];
+  if (!catData) return;
+  title.textContent = catData.label;
+  grid.innerHTML = catData.tools.map(t =>
+    `<button class="mobile-panel-item${currentTool === t.tool ? ' active' : ''}"
+             data-tool="${t.tool}"
+             onclick="loadTool('${t.tool}');closeMobileCategory()">
+       ${t.svg}
+       <span>${t.label}</span>
+     </button>`
+  ).join('');
+
+  panel.classList.add('open');
+  overlay.classList.add('open');
+}
+
+function closeMobileCategory() {
+  const panel   = document.getElementById('mobileCategoryPanel');
+  const overlay = document.getElementById('mobilePanelOverlay');
+  if (panel)   panel.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
+  document.querySelectorAll('.mobile-tab').forEach(b => b.classList.remove('cat-active'));
+}
+
+// Met en évidence l'onglet de catégorie correspondant à l'outil actif
+function updateActiveMobileTab(toolName) {
+  document.querySelectorAll('.mobile-tab').forEach(b => b.classList.remove('tool-active'));
+  for (const [cat, data] of Object.entries(mobileCategories)) {
+    if (data.tools.some(t => t.tool === toolName)) {
+      const btn = document.querySelector(`.mobile-tab[data-cat="${cat}"]`);
+      if (btn) btn.classList.add('tool-active');
+      break;
+    }
+  }
 }
 
 function loadTool(name) {
@@ -72,13 +175,8 @@ function loadTool(name) {
   document.querySelectorAll('.sb-item').forEach(el => {
     el.classList.toggle('active', el.dataset.tool === name);
   });
-  // Nav mobile
-  document.querySelectorAll('.mobile-nav-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.tool === name);
-  });
-  // Scroll l'item actif dans la nav mobile
-  const activeNav = document.querySelector(`.mobile-nav-item[data-tool="${name}"]`);
-  if (activeNav) activeNav.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  // Onglet catégorie mobile actif
+  updateActiveMobileTab(name);
   const main = document.getElementById('toolContent');
   main.innerHTML = '';
   setStatus('Prêt');
