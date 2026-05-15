@@ -169,6 +169,10 @@ function updateActiveMobileTab(toolName) {
   }
 }
 
+// Cache des conteneurs de modules — préserve le DOM (et donc l'état de travail)
+// quand l'utilisateur navigue entre les outils.
+const _toolContainers = {};
+
 function loadTool(name) {
   currentTool = name;
   // Sidebar desktop
@@ -177,8 +181,6 @@ function loadTool(name) {
   });
   // Onglet catégorie mobile actif
   updateActiveMobileTab(name);
-  const main = document.getElementById('toolContent');
-  main.innerHTML = '';
   setStatus('Prêt');
 
   const tools = {
@@ -204,7 +206,27 @@ function loadTool(name) {
     'edit-docx':  renderEditDocx,
   };
 
-  (tools[name] || renderCreate)(main);
+  const main = document.getElementById('toolContent');
+
+  // Nettoyer l'état visuel du module qu'on quitte
+  document.getElementById('_dxRzTip')?.remove();
+  document.getElementById('_eiSizeTip')?.remove();
+
+  // Masquer tous les conteneurs existants
+  Object.values(_toolContainers).forEach(div => { div.style.display = 'none'; });
+
+  if (_toolContainers[name]) {
+    // Réafficher le conteneur déjà rendu — tout l'état est préservé
+    _toolContainers[name].style.display = 'flex';
+  } else {
+    // Première visite : créer le conteneur et rendre le module
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0;width:100%';
+    div.dataset.tool = name;
+    main.appendChild(div);
+    _toolContainers[name] = div;
+    (tools[name] || renderCreate)(div);
+  }
 }
 
 // ─── UTILITAIRES ─────────────────────────────────────────────────
@@ -286,6 +308,8 @@ function enableImageDrop(editor) {
       document.execCommand('insertHTML', false,
         `<img src="${dataURL}" style="max-width:100%;border-radius:4px;margin:4px 0"/>`);
     }
+    // Câbler les poignées sur les images nouvellement insérées
+    if (typeof dxWireAllImages === 'function') setTimeout(() => dxWireAllImages(), 0);
     showNotif(`✅ ${files.length} image(s) insérée(s)`);
   });
 }
@@ -301,7 +325,7 @@ function makeDropzone(container, accept, label, hint, cb) {
   `;
   const inp = dz.querySelector('input[type="file"]');
   if (cb.multiple) inp.setAttribute('multiple', '');
-  inp.addEventListener('change', e => { if (e.target.files.length) cb(e.target.files); });
+  inp.addEventListener('change', e => { if (e.target.files.length) { cb(e.target.files); e.target.value = ''; } });
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
   dz.addEventListener('drop', e => {
@@ -617,6 +641,7 @@ function renderEditImg(main) {
   // Keyboard shortcuts
   document.addEventListener('keydown', function eiKb(e) {
     if (!document.getElementById('eiPages')) { document.removeEventListener('keydown', eiKb); return; }
+    if (currentTool !== 'edit-img') return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && _eiSel && !_eiSel.dataset.editing) {
       e.preventDefault(); eiDeleteSel();
     }
@@ -802,24 +827,61 @@ function eiWire(el, page) {
   el.addEventListener('click', e => { e.stopPropagation(); eiSelect(el); });
 
   // Handles de redimensionnement
+  const EI_CORNERS = new Set(['nw','ne','se','sw']);
   ['nw','n','ne','e','se','s','sw','w'].forEach(pos => {
     const h = document.createElement('div');
     h.className = 'ei-rh ei-rh-' + pos;
+    if (EI_CORNERS.has(pos)) h.title = 'Redimensionner (proportionnel) — Maj pour libre';
     el.appendChild(h);
     h.addEventListener('mousedown', e => {
       e.preventDefault(); e.stopPropagation();
+      eiSelect(el); // sélectionner si on commence un resize au survol
       const sx = e.clientX, sy = e.clientY;
       const ow = el.offsetWidth, oh = el.offsetHeight;
       const ol = parseInt(el.style.left)||0, ot = parseInt(el.style.top)||0;
-      function mv(e) {
-        const dx = e.clientX - sx, dy = e.clientY - sy;
-        if (pos.includes('e')) el.style.width  = Math.max(60, ow+dx)+'px';
-        if (pos.includes('s')) el.style.height = Math.max(24, oh+dy)+'px';
-        if (pos.includes('w')) { const nw=Math.max(60,ow-dx); el.style.width=nw+'px'; el.style.left=(ol+ow-nw)+'px'; }
-        if (pos.includes('n')) { const nh=Math.max(24,oh-dy); el.style.height=nh+'px'; el.style.top=(ot+oh-nh)+'px'; }
+      const aspect = ow / oh;
+      const isCorner = EI_CORNERS.has(pos);
+
+      // Tooltip taille réutilisé
+      let tip = document.getElementById('_eiSizeTip');
+      if (!tip) {
+        tip = document.createElement('div');
+        tip.id = '_eiSizeTip';
+        tip.style.cssText = 'position:fixed;background:#1e40af;color:white;font-size:11px;font-family:monospace;padding:2px 7px;border-radius:3px;pointer-events:none;z-index:10000;display:none;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.3)';
+        document.body.appendChild(tip);
+      }
+
+      function mv(e2) {
+        const ddx = e2.clientX - sx, ddy = e2.clientY - sy;
+        let nw = ow, nh = oh, nl = ol, nt = ot;
+        const lockRatio = isCorner && !e2.shiftKey;
+
+        if (pos === 'e')  { nw = Math.max(60, ow+ddx); }
+        if (pos === 's')  { nh = Math.max(24, oh+ddy); }
+        if (pos === 'w')  { nw = Math.max(60, ow-ddx); nl = ol+ow-nw; }
+        if (pos === 'n')  { nh = Math.max(24, oh-ddy); nt = ot+oh-nh; }
+        if (pos === 'se') { nw = Math.max(60, ow+ddx); nh = lockRatio ? nw/aspect : Math.max(24, oh+ddy); }
+        if (pos === 'sw') { nw = Math.max(60, ow-ddx); nl = ol+ow-nw; nh = lockRatio ? nw/aspect : Math.max(24, oh+ddy); }
+        if (pos === 'ne') { nw = Math.max(60, ow+ddx); nh = lockRatio ? nw/aspect : Math.max(24, oh-ddy); nt = lockRatio ? ot+oh-nh : ot+oh-nh; }
+        if (pos === 'nw') { nw = Math.max(60, ow-ddx); nl = ol+ow-nw; nh = lockRatio ? nw/aspect : Math.max(24, oh-ddy); nt = ot+oh-nh; }
+
+        el.style.width  = nw + 'px';
+        el.style.height = nh + 'px';
+        el.style.left   = nl + 'px';
+        el.style.top    = nt + 'px';
+
+        // Tooltip dimensions
+        const r = el.getBoundingClientRect();
+        tip.textContent = Math.round(nw) + ' × ' + Math.round(nh) + ' px';
+        tip.style.left    = (r.right + 10) + 'px';
+        tip.style.top     = (r.bottom - 22) + 'px';
+        tip.style.display = 'block';
       }
       document.addEventListener('mousemove', mv);
-      document.addEventListener('mouseup', () => document.removeEventListener('mousemove', mv), { once: true });
+      document.addEventListener('mouseup', () => {
+        document.removeEventListener('mousemove', mv);
+        tip.style.display = 'none';
+      }, { once: true });
     });
   });
 }
@@ -922,6 +984,9 @@ function eiNewFile() {
 // 3. MODIFIER & ANNOTER UN PDF
 // ════════════════════════════════════════════════════════════════
 let _annMode = 'edit';
+let _annShapeMode = null, _annShapeStroke = '#e74c3c', _annShapeFill = 'none', _annSelShape = null;
+let _dxShapeMode  = null, _dxShapeStroke  = '#e74c3c', _dxShapeFill  = 'none', _dxSelShape  = null;
+let _dxImgHandlerInit = false;
 
 function renderAnnotate(main) {
   main.innerHTML = `
@@ -939,8 +1004,9 @@ function renderAnnotate(main) {
     <div id="annDrop"></div>
     <div id="annApp" style="display:none;flex-direction:column;flex:1;overflow:hidden">
       <div class="rich-toolbar">
-        <button class="ei-mode active" id="annModeEdit" onclick="annSetMode('edit')" title="Cliquer sur le texte pour le modifier directement">✏️ Modifier texte</button>
-        <button class="ei-mode"        id="annModeNote" onclick="annSetMode('note')" title="Cliquer sur la page pour ajouter une note flottante">💬 Ajouter note</button>
+        <button class="ei-mode active" id="annModeEdit" onclick="annSetMode('edit')" title="Modifier le texte directement">✏️ Texte</button>
+        <button class="ei-mode"        id="annModeNote" onclick="annSetMode('note')" title="Ajouter une note flottante">💬 Note</button>
+        <button class="ei-mode" onclick="annInsertImage()" title="Insérer une image — glisser pour déplacer, poignées pour redimensionner">🖼 Image</button>
         <span class="rich-sep"></span>
         <select id="ann-font" title="Police">
           <option>Arial</option><option>Times New Roman</option><option>Courier New</option><option>Georgia</option>
@@ -952,6 +1018,16 @@ function renderAnnotate(main) {
         <button onclick="document.execCommand('italic')"    title="Italique"><i>I</i></button>
         <button onclick="document.execCommand('underline')" title="Souligné"><u>S</u></button>
         <input type="color" id="ann-color" value="#000000" title="Couleur texte"/>
+        <span class="rich-sep"></span>
+        <button class="ei-mode" id="annModeRect"    onclick="annSetShapeMode('rect')"    title="Rectangle — cliquer-glisser pour dessiner">▭</button>
+        <button class="ei-mode" id="annModeEllipse" onclick="annSetShapeMode('ellipse')" title="Ellipse — cliquer-glisser pour dessiner">◯</button>
+        <button class="ei-mode" id="annModeLine"    onclick="annSetShapeMode('line')"    title="Ligne — cliquer-glisser pour tracer">╱</button>
+        <button class="ei-mode" id="annModeArrow"   onclick="annSetShapeMode('arrow')"   title="Flèche — cliquer-glisser pour tracer">→</button>
+        <input type="color" id="ann-stroke" value="#e74c3c" title="Couleur contour" oninput="annApplyShapeStroke(this.value)"/>
+        <label class="shape-fill-wrap" title="Activer le remplissage de la forme">
+          <input type="checkbox" id="ann-fill-check" onchange="annApplyShapeFill(document.getElementById('ann-fill').value,this.checked)"/>
+          <input type="color" id="ann-fill" value="#ffff00" title="Couleur fond" oninput="annApplyShapeFill(this.value,document.getElementById('ann-fill-check').checked)"/>
+        </label>
         <span class="rich-sep"></span>
         <button class="btn btn-red"  style="height:26px;padding:0 10px;font-size:12px" onclick="annExport()">⬇ Exporter PDF</button>
         <button class="btn btn-gray" style="height:26px;padding:0 10px;font-size:12px" onclick="annNewFile()">📂 Autre fichier</button>
@@ -980,6 +1056,7 @@ function renderAnnotate(main) {
 
   document.addEventListener('keydown', function annKb(e) {
     if (!document.getElementById('annPages')) { document.removeEventListener('keydown', annKb); return; }
+    if (currentTool !== 'annotate') return;
     if (e.key === 'Escape') document.querySelectorAll('.ann-block[contenteditable="true"]').forEach(annExitBlock);
   });
 }
@@ -1025,6 +1102,7 @@ async function annLoad(file) {
       // Overlays texte éditables
       const textContent = await page.getTextContent();
       annBuildOverlays(pageDiv, textContent, viewport, scale);
+      annInitSvgLayer(pageDiv);
 
       // Clic page → note flottante si mode "note"
       pageDiv.addEventListener('click', e => {
@@ -1137,11 +1215,460 @@ function annExitBlock(div) {
 
 function annSetMode(m) {
   _annMode = m;
+  _annShapeMode = null;
+  if (_annSelShape) { const s = _annSelShape.dataset.savedStroke; if (s) _shapeSetStroke(_annSelShape, s); _annSelShape = null; }
+  ['Rect','Ellipse','Line','Arrow'].forEach(s => document.getElementById('annMode'+s)?.classList.remove('active'));
   document.getElementById('annModeEdit').classList.toggle('active', m === 'edit');
   document.getElementById('annModeNote').classList.toggle('active', m === 'note');
   document.querySelectorAll('#annPages .ei-page').forEach(p => {
     p.style.cursor = m === 'note' ? 'crosshair' : 'default';
+    const bg = p.querySelector('.ann-svg-bg');
+    if (bg) bg.style.pointerEvents = 'none';
   });
+}
+
+// ── Formes SVG partagées (Annoter + Word) ────────────────────────────────────
+function _shapeCreate(type, x, y, stroke, fill) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const sw = 2.5;
+  let el;
+  if (type === 'rect') {
+    el = document.createElementNS(ns, 'rect');
+    el.setAttribute('x', x); el.setAttribute('y', y);
+    el.setAttribute('width', 2); el.setAttribute('height', 2);
+    el.setAttribute('rx', 3);
+    el.setAttribute('fill', fill || 'none');
+  } else if (type === 'ellipse') {
+    el = document.createElementNS(ns, 'ellipse');
+    el.setAttribute('cx', x); el.setAttribute('cy', y);
+    el.setAttribute('rx', 1); el.setAttribute('ry', 1);
+    el.setAttribute('fill', fill || 'none');
+  } else {
+    el = document.createElementNS(ns, 'g');
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', x); line.setAttribute('y1', y);
+    line.setAttribute('x2', x); line.setAttribute('y2', y);
+    line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', sw);
+    line.setAttribute('stroke-linecap', 'round');
+    el.appendChild(line);
+    if (type === 'arrow') {
+      const head = document.createElementNS(ns, 'polygon');
+      head.setAttribute('fill', stroke);
+      head.setAttribute('points', `${x},${y} ${x},${y} ${x},${y}`);
+      el.appendChild(head);
+    }
+    el.dataset.x0 = x; el.dataset.y0 = y;
+    el.dataset.shapeType = type;
+    el.style.cssText = 'cursor:pointer;pointer-events:all';
+    return el;
+  }
+  el.setAttribute('stroke', stroke); el.setAttribute('stroke-width', sw);
+  el.dataset.shapeType = type;
+  el.style.cssText = 'cursor:pointer;pointer-events:all';
+  return el;
+}
+
+function _shapeResize(el, type, x0, y0, x1, y1) {
+  if (type === 'rect') {
+    const x = Math.min(x0,x1), y = Math.min(y0,y1);
+    el.setAttribute('x', x); el.setAttribute('y', y);
+    el.setAttribute('width', Math.max(2, Math.abs(x1-x0)));
+    el.setAttribute('height', Math.max(2, Math.abs(y1-y0)));
+  } else if (type === 'ellipse') {
+    el.setAttribute('cx', (x0+x1)/2); el.setAttribute('cy', (y0+y1)/2);
+    el.setAttribute('rx', Math.max(1, Math.abs(x1-x0)/2));
+    el.setAttribute('ry', Math.max(1, Math.abs(y1-y0)/2));
+  } else {
+    const line = el.querySelector('line');
+    if (line) { line.setAttribute('x2', x1); line.setAttribute('y2', y1); }
+    if (type === 'arrow') {
+      const head = el.querySelector('polygon');
+      if (head && (x1 !== x0 || y1 !== y0)) {
+        const angle = Math.atan2(y1-y0, x1-x0);
+        const L = 13, W = 7;
+        const ax = x1 - L*Math.cos(angle), ay = y1 - L*Math.sin(angle);
+        const p1 = `${ax+W*Math.sin(angle)},${ay-W*Math.cos(angle)}`;
+        const p2 = `${ax-W*Math.sin(angle)},${ay+W*Math.cos(angle)}`;
+        head.setAttribute('points', `${x1},${y1} ${p1} ${p2}`);
+      }
+    }
+  }
+}
+
+function _shapeGetStroke(el) {
+  const t = el.dataset.shapeType;
+  if (t === 'rect' || t === 'ellipse') return el.getAttribute('stroke');
+  const line = el.querySelector('line');
+  return line ? line.getAttribute('stroke') : '#e74c3c';
+}
+function _shapeGetFill(el) {
+  const t = el.dataset.shapeType;
+  if (t === 'rect' || t === 'ellipse') return el.getAttribute('fill') || 'none';
+  return 'none';
+}
+function _shapeSetStroke(el, color) {
+  const t = el.dataset.shapeType;
+  if (t === 'rect' || t === 'ellipse') {
+    el.setAttribute('stroke', color);
+  } else {
+    const line = el.querySelector('line');
+    if (line) line.setAttribute('stroke', color);
+    const head = el.querySelector('polygon');
+    if (head) head.setAttribute('fill', color);
+  }
+}
+function _shapeSetFill(el, color) {
+  const t = el.dataset.shapeType;
+  if (t === 'rect' || t === 'ellipse') el.setAttribute('fill', color);
+}
+
+// Suppression au clavier (Del / Backspace) sur formes et éléments sélectionnés
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  const ae = document.activeElement;
+  if (ae && (ae.isContentEditable || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+  if (_annSelShape) { e.preventDefault(); _annSelShape.remove(); _annSelShape = null; }
+  if (_dxSelShape)  { e.preventDefault(); _dxSelShape.remove();  _dxSelShape  = null; }
+  // Supprimer un élément sélectionné (image, note) dans Annoter
+  if (_eiSel && currentTool === 'annotate' && !_eiSel.dataset.editing) { e.preventDefault(); eiDeleteSel(); }
+});
+
+// ── Annoter — insérer une image ──────────────────────────────────────────────
+function annInsertImage() {
+  const pages = document.querySelectorAll('#annPages .ei-page');
+  if (!pages.length) { showNotif('⚠️ Ouvrez d\'abord un PDF', 'error'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    const dataURL = await readFileAsDataURL(file);
+    // Choisir la page la plus visible à l'écran
+    const page = [...pages].find(p => {
+      const r = p.getBoundingClientRect();
+      return r.top < window.innerHeight && r.bottom > 0;
+    }) || pages[0];
+    const el = document.createElement('div');
+    el.className = 'ei-element ei-img-el';
+    el.style.cssText = 'position:absolute;left:60px;top:60px;width:200px;height:150px;overflow:hidden;z-index:12';
+    const img = document.createElement('img');
+    img.src = dataURL;
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;pointer-events:none;display:block';
+    el.appendChild(img);
+    page.appendChild(el);
+    eiWire(el, page);
+    eiSelect(el);
+    showNotif('✅ Image insérée — glissez pour déplacer, poignées bleues pour redimensionner, Suppr pour effacer');
+  };
+  inp.click();
+}
+
+// ── Annoter — dessin de formes ────────────────────────────────────────────────
+function annSetShapeMode(m) {
+  const newMode = (_annShapeMode === m) ? null : m;
+  _annShapeMode = newMode;
+  if (_annSelShape) { const s = _annSelShape.dataset.savedStroke; if (s) _shapeSetStroke(_annSelShape, s); _annSelShape = null; }
+  if (newMode) {
+    _annMode = 'shape';
+    document.getElementById('annModeEdit').classList.remove('active');
+    document.getElementById('annModeNote').classList.remove('active');
+  }
+  ['Rect','Ellipse','Line','Arrow'].forEach(s =>
+    document.getElementById('annMode'+s)?.classList.toggle('active', s.toLowerCase() === newMode));
+  document.querySelectorAll('#annPages .ei-page').forEach(p => {
+    p.style.cursor = newMode ? 'crosshair' : 'default';
+    const bg = p.querySelector('.ann-svg-bg');
+    if (bg) bg.style.pointerEvents = newMode ? 'all' : 'none';
+  });
+}
+
+function annInitSvgLayer(pageDiv) {
+  if (pageDiv.querySelector('.ann-svg-layer')) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.className = 'ann-svg-layer';
+  svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;overflow:visible';
+
+  // Fond transparent — capte les events de dessin en shape mode
+  const bg = document.createElementNS(ns, 'rect');
+  bg.className = 'ann-svg-bg';
+  bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%');
+  bg.setAttribute('fill', 'transparent');
+  bg.style.cssText = 'pointer-events:none;cursor:crosshair';
+  svg.appendChild(bg);
+  pageDiv.appendChild(svg);
+
+  let drawing = false, x0, y0, drawEl;
+  const coords = e => { const r = svg.getBoundingClientRect(); return { x: e.clientX-r.left, y: e.clientY-r.top }; };
+
+  bg.addEventListener('mousedown', e => {
+    if (!_annShapeMode) return;
+    e.preventDefault(); e.stopPropagation();
+    const {x,y} = coords(e); x0=x; y0=y;
+    drawEl = _shapeCreate(_annShapeMode, x, y, _annShapeStroke, _annShapeFill);
+    drawEl.style.pointerEvents = 'none';
+    svg.appendChild(drawEl); drawing = true;
+  });
+  svg.addEventListener('mousemove', e => {
+    if (!drawing || !drawEl) return;
+    const {x,y} = coords(e);
+    _shapeResize(drawEl, _annShapeMode, x0, y0, x, y);
+  });
+  const done = () => {
+    if (!drawing) return; drawing = false;
+    if (drawEl) { drawEl.style.pointerEvents = 'all'; annFinalizeShape(drawEl); drawEl = null; }
+  };
+  svg.addEventListener('mouseup', done);
+  svg.addEventListener('mouseleave', done);
+}
+
+function annFinalizeShape(el) {
+  el.addEventListener('click', e => {
+    if (_annShapeMode) return;
+    e.stopPropagation();
+    annSelectShape(el);
+  });
+}
+
+function annSelectShape(el) {
+  if (_annSelShape && _annSelShape !== el) {
+    const s = _annSelShape.dataset.savedStroke;
+    if (s) _shapeSetStroke(_annSelShape, s);
+  }
+  _annSelShape = el;
+  el.dataset.savedStroke = _shapeGetStroke(el);
+  _shapeSetStroke(el, '#2563eb');
+  // Sync les pickers couleurs
+  const sp = document.getElementById('ann-stroke');
+  const fp = document.getElementById('ann-fill');
+  const fc = document.getElementById('ann-fill-check');
+  if (sp) sp.value = el.dataset.savedStroke || '#e74c3c';
+  const fill = _shapeGetFill(el);
+  if (fp) fp.value = (fill && fill !== 'none') ? fill : '#ffff00';
+  if (fc) fc.checked = fill !== 'none';
+}
+
+function annApplyShapeStroke(color) {
+  _annShapeStroke = color;
+  if (_annSelShape) { _annSelShape.dataset.savedStroke = color; _shapeSetStroke(_annSelShape, color); }
+}
+function annApplyShapeFill(color, useFill) {
+  _annShapeFill = useFill ? color : 'none';
+  if (_annSelShape) _shapeSetFill(_annSelShape, _annShapeFill);
+}
+
+// ── Word — dessin de formes ───────────────────────────────────────────────────
+function dxSetShapeMode(m) {
+  const newMode = (_dxShapeMode === m) ? null : m;
+  _dxShapeMode = newMode;
+  if (_dxSelShape) { const s = _dxSelShape.dataset.savedStroke; if (s) _shapeSetStroke(_dxSelShape, s); _dxSelShape = null; }
+  ['Rect','Ellipse','Line','Arrow'].forEach(s =>
+    document.getElementById('dxMode'+s)?.classList.toggle('active', s.toLowerCase() === newMode));
+  const bg = document.querySelector('.docx-svg-bg');
+  if (bg) bg.style.pointerEvents = newMode ? 'all' : 'none';
+  const editor = document.getElementById('docxEditor');
+  if (editor) editor.style.cursor = newMode ? 'crosshair' : '';
+}
+
+function dxInitSvgLayer() {
+  const editor = document.getElementById('docxEditor');
+  if (!editor || editor.querySelector('.docx-svg-layer')) return;
+  editor.style.position = 'relative';
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.className = 'docx-svg-layer';
+  svg.setAttribute('contenteditable', 'false');
+  svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;min-height:100%;z-index:10;overflow:visible;pointer-events:none';
+
+  const bg = document.createElementNS(ns, 'rect');
+  bg.className = 'docx-svg-bg';
+  bg.setAttribute('width', '100%'); bg.setAttribute('height', '9999');
+  bg.setAttribute('fill', 'transparent');
+  bg.style.cssText = 'pointer-events:none;cursor:crosshair';
+  svg.appendChild(bg);
+  editor.appendChild(svg);
+
+  let drawing = false, x0, y0, drawEl;
+  const coords = e => { const r = svg.getBoundingClientRect(); return { x: e.clientX-r.left, y: e.clientY-r.top }; };
+
+  bg.addEventListener('mousedown', e => {
+    if (!_dxShapeMode) return;
+    e.preventDefault(); e.stopPropagation();
+    const {x,y} = coords(e); x0=x; y0=y;
+    drawEl = _shapeCreate(_dxShapeMode, x, y, _dxShapeStroke, _dxShapeFill);
+    drawEl.style.pointerEvents = 'none';
+    svg.appendChild(drawEl); drawing = true;
+  });
+  svg.addEventListener('mousemove', e => {
+    if (!drawing || !drawEl) return;
+    const {x,y} = coords(e);
+    _shapeResize(drawEl, _dxShapeMode, x0, y0, x, y);
+  });
+  const done = () => {
+    if (!drawing) return; drawing = false;
+    if (drawEl) { drawEl.style.pointerEvents = 'all'; dxFinalizeShape(drawEl); drawEl = null; }
+  };
+  svg.addEventListener('mouseup', done);
+  svg.addEventListener('mouseleave', done);
+}
+
+function dxFinalizeShape(el) {
+  el.addEventListener('click', e => {
+    if (_dxShapeMode) return;
+    e.stopPropagation();
+    dxSelectShape(el);
+  });
+}
+
+function dxSelectShape(el) {
+  if (_dxSelShape && _dxSelShape !== el) {
+    const s = _dxSelShape.dataset.savedStroke;
+    if (s) _shapeSetStroke(_dxSelShape, s);
+  }
+  _dxSelShape = el;
+  el.dataset.savedStroke = _shapeGetStroke(el);
+  _shapeSetStroke(el, '#2563eb');
+  const sp = document.getElementById('dx-stroke');
+  const fp = document.getElementById('dx-shape-fill');
+  const fc = document.getElementById('dx-fill-check');
+  if (sp) sp.value = el.dataset.savedStroke || '#e74c3c';
+  const fill = _shapeGetFill(el);
+  if (fp) fp.value = (fill && fill !== 'none') ? fill : '#ffff00';
+  if (fc) fc.checked = fill !== 'none';
+}
+
+// ── Word — redimensionnement d'images (style Word/Canva) ────────────────────
+// Chaque <img> dans l'éditeur est enveloppé dans un <span class="dx-img-wrap">
+// avec 4 poignées de coin. Survol → poignées visibles, glisser → resize direct.
+
+function dxWrapImg(img) {
+  if (img.closest('.dx-img-wrap')) return; // déjà enveloppé
+  if (!img.parentNode) return;
+
+  const wrap = document.createElement('span');
+  wrap.className = 'dx-img-wrap';
+  wrap.contentEditable = 'false';
+  img.parentNode.insertBefore(wrap, img);
+  wrap.appendChild(img);
+
+  // Fixer la taille explicite dès maintenant (si l'image est chargée)
+  const fixSize = () => {
+    if (!img.style.width && img.naturalWidth) {
+      img.style.width  = img.getBoundingClientRect().width  + 'px';
+      img.style.height = img.getBoundingClientRect().height + 'px';
+    }
+  };
+  if (img.complete) fixSize(); else img.addEventListener('load', fixSize, { once: true });
+
+  // Tooltip taille (réutilisé, unique dans le DOM)
+  function getTip() {
+    let t = document.getElementById('_dxRzTip');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = '_dxRzTip';
+      t.style.cssText = 'position:fixed;background:#1e40af;color:#fff;font-size:11px;font-family:monospace;padding:2px 8px;border-radius:3px;pointer-events:none;z-index:10000;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.3);display:none';
+      document.body.appendChild(t);
+    }
+    return t;
+  }
+
+  // 4 poignées de coin
+  ['nw','ne','se','sw'].forEach(pos => {
+    const h = document.createElement('span');
+    h.className = 'dx-rh dx-rh-' + pos;
+    h.title = 'Glisser pour redimensionner (Maj = déformer librement)';
+    wrap.appendChild(h);
+
+    h.addEventListener('mousedown', ev => {
+      ev.preventDefault(); ev.stopPropagation();
+
+      // S'assurer que la taille est explicite
+      if (!img.style.width || img.style.width === 'auto') {
+        const r = img.getBoundingClientRect();
+        img.style.width  = r.width  + 'px';
+        img.style.height = r.height + 'px';
+      }
+      img.style.maxWidth = 'none';
+
+      const sx = ev.clientX, sy = ev.clientY;
+      const ow = parseFloat(img.style.width)  || img.getBoundingClientRect().width;
+      const oh = parseFloat(img.style.height) || img.getBoundingClientRect().height;
+      const aspect = ow / oh;
+      const tip = getTip();
+      tip.style.display = 'block';
+
+      function mv(e2) {
+        const ddx = e2.clientX - sx, ddy = e2.clientY - sy;
+        const lock = !e2.shiftKey; // proportionnel par défaut, Maj = libre
+        let nw;
+        switch (pos) {
+          case 'se': nw = Math.max(40, ow + ddx); break;
+          case 'sw': nw = Math.max(40, ow - ddx); break;
+          case 'ne': nw = Math.max(40, ow + ddx); break;
+          case 'nw': nw = Math.max(40, ow - ddx); break;
+        }
+        const nh = lock ? nw / aspect
+                        : Math.max(30, oh + (pos[0] === 's' ? ddy : -ddy));
+        img.style.width  = nw + 'px';
+        img.style.height = nh + 'px';
+
+        const r = img.getBoundingClientRect();
+        tip.textContent  = Math.round(nw) + ' × ' + Math.round(nh) + ' px';
+        tip.style.left   = (r.right + 10) + 'px';
+        tip.style.top    = (r.bottom - 22) + 'px';
+      }
+
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', () => {
+        document.removeEventListener('mousemove', mv);
+        tip.style.display = 'none';
+      }, { once: true });
+    });
+  });
+
+  // Bouton supprimer (affiché en haut à droite au survol)
+  const del = document.createElement('button');
+  del.className = 'dx-img-del';
+  del.textContent = '✕';
+  del.title = 'Supprimer cette image';
+  del.addEventListener('mousedown', ev => ev.stopPropagation());
+  del.addEventListener('click', ev => { ev.stopPropagation(); wrap.remove(); });
+  wrap.appendChild(del);
+}
+
+// Envelopper toutes les images existantes dans l'éditeur
+function dxWireAllImages() {
+  const editor = document.getElementById('docxEditor');
+  if (!editor) return;
+  editor.querySelectorAll('img:not(.dx-wired)').forEach(img => {
+    img.classList.add('dx-wired');
+    dxWrapImg(img);
+  });
+}
+
+// HTML nettoyé pour l'export (supprime les wrappers, garde les <img> avec styles)
+function dxGetCleanHtml() {
+  const editor = document.getElementById('docxEditor');
+  const clone = editor.cloneNode(true);
+  clone.querySelectorAll('.dx-img-wrap').forEach(wrap => {
+    const img = wrap.querySelector('img');
+    if (img) { img.classList.remove('dx-wired'); wrap.replaceWith(img); }
+  });
+  return clone.innerHTML;
+}
+
+function dxInitImageHandler() {
+  if (_dxImgHandlerInit) return;
+  _dxImgHandlerInit = true;
+  // Plus de gestionnaire global nécessaire — chaque image est auto-câblée via dxWrapImg
+}
+
+function dxApplyShapeStroke(color) {
+  _dxShapeStroke = color;
+  if (_dxSelShape) { _dxSelShape.dataset.savedStroke = color; _shapeSetStroke(_dxSelShape, color); }
+}
+function dxApplyShapeFill(color, useFill) {
+  _dxShapeFill = useFill ? color : 'none';
+  if (_dxSelShape) _shapeSetFill(_dxSelShape, _dxShapeFill);
 }
 
 function annAddNote(page, x, y) {
@@ -2414,6 +2941,16 @@ function renderEditDocx(main) {
         <input type="color" id="dx-color" value="#000000" title="Couleur texte"/>
         <input type="color" id="dx-bg" value="#ffffff" title="Surlignage"/>
         <span class="rich-sep"></span>
+        <button class="ei-mode" id="dxModeRect"    onclick="dxSetShapeMode('rect')"    title="Rectangle — cliquer-glisser pour dessiner">▭</button>
+        <button class="ei-mode" id="dxModeEllipse" onclick="dxSetShapeMode('ellipse')" title="Ellipse — cliquer-glisser pour dessiner">◯</button>
+        <button class="ei-mode" id="dxModeLine"    onclick="dxSetShapeMode('line')"    title="Ligne — cliquer-glisser pour tracer">╱</button>
+        <button class="ei-mode" id="dxModeArrow"   onclick="dxSetShapeMode('arrow')"   title="Flèche — cliquer-glisser pour tracer">→</button>
+        <input type="color" id="dx-stroke" value="#e74c3c" title="Couleur contour" oninput="dxApplyShapeStroke(this.value)"/>
+        <label class="shape-fill-wrap" title="Activer le remplissage de la forme">
+          <input type="checkbox" id="dx-fill-check" onchange="dxApplyShapeFill(document.getElementById('dx-shape-fill').value,this.checked)"/>
+          <input type="color" id="dx-shape-fill" value="#ffff00" title="Couleur fond forme" oninput="dxApplyShapeFill(this.value,document.getElementById('dx-fill-check').checked)"/>
+        </label>
+        <span class="rich-sep"></span>
         <input type="text" id="dx-title" placeholder="Nom du fichier..." style="border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:12px;height:26px;width:160px"/>
         <button class="btn btn-blue" style="height:26px;padding:0 12px;font-size:12px" onclick="exportDocxWord()">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/></svg> Sauvegarder .docx
@@ -2444,6 +2981,7 @@ function renderEditDocx(main) {
   // Raccourcis clavier
   document.addEventListener('keydown', function dxKb(e) {
     if (!document.getElementById('docxEditor')) { document.removeEventListener('keydown', dxKb); return; }
+    if (currentTool !== 'edit-docx') return;
     if (e.ctrlKey && !e.altKey) {
       if (e.key === 'w') { e.preventDefault(); exportDocxWord(); }
       if (e.key === 'p') { e.preventDefault(); exportDocxPDF(); }
@@ -2498,6 +3036,10 @@ async function _loadDocxFile(file) {
     titleInput.value = baseName;
     fileLabel.textContent = '📄 ' + file.name;
 
+    // Câbler les poignées de redimensionnement sur toutes les images
+    // (setTimeout pour laisser le navigateur calculer les dimensions naturelles)
+    setTimeout(() => dxWireAllImages(), 50);
+
     // Compteur mots/caractères
     editor.addEventListener('input', () => {
       const t = editor.innerText.trim();
@@ -2507,6 +3049,12 @@ async function _loadDocxFile(file) {
     });
     editor.dispatchEvent(new Event('input'));
     enableImageDrop(editor);
+    // Effacer formes SVG de l'ancien document
+    const _oldSvg = document.querySelector('.docx-svg-layer');
+    if (_oldSvg) Array.from(_oldSvg.children).slice(1).forEach(c => c.remove());
+    _dxSelShape = null;
+    dxInitSvgLayer();
+    dxInitImageHandler();
 
     // Contrôles toolbar
     const qs = id => document.getElementById(id);
@@ -2548,7 +3096,7 @@ function exportDocxWord() {
   const editor = document.getElementById('docxEditor');
   if (!editor || !editor.innerText.trim()) { showNotif('⚠️ Document vide.', 'error'); return; }
   const title = (document.getElementById('dx-title')?.value || 'document').trim() || 'document';
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${editor.innerHTML}</body></html>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${dxGetCleanHtml()}</body></html>`;
   const blob = window.htmlDocx.asBlob(html);
   dl(blob, sanitize(title) + '.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   showNotif('✅ DOCX sauvegardé : ' + sanitize(title) + '.docx');
@@ -2565,7 +3113,7 @@ async function exportDocxPDF() {
     const wrap = Object.assign(document.createElement('div'), {
       style: 'position:fixed;top:-99999px;left:0;width:794px;padding:60px 70px;background:#fff;font-family:Arial,sans-serif;font-size:14px;line-height:1.75;color:#000'
     });
-    wrap.innerHTML = editor.innerHTML;
+    wrap.innerHTML = dxGetCleanHtml();
     document.body.appendChild(wrap);
     const canvas = await html2canvas(wrap, { scale: 2, useCORS: true, backgroundColor: '#fff' });
     document.body.removeChild(wrap);
